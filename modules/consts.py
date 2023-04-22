@@ -47,9 +47,9 @@ PARAM_CONFIG = {
     SAMPLER: {
         "type": str,
         "default": "DPM++ 2M Karras",
-        "supported_values": ['Euler a', 'Euler', 'LMS', 'Heun', 'DPM2', 'DPM2 a', 'DPM++ 2S a', 'DPM++ 2M', 
-                      'DPM++ SDE', 'DPM fast', 'DPM adaptive', 'LMS Karras', 'DPM2 Karras', 'DPM2 a Karras', 
-                      'DPM++ 2S a Karras', 'DPM++ 2M Karras', 'DPM++ SDE Karras', "DDIM", "PLMS"]
+        "supported_values": ['Euler a', 'Euler', 'LMS', 'Heun', 'DPM2', 'DPM2 a', 'DPM++ 2S a', 'DPM++ 2M',
+                             'DPM++ SDE', 'DPM fast', 'DPM adaptive', 'LMS Karras', 'DPM2 Karras', 'DPM2 a Karras',
+                             'DPM++ 2S a Karras', 'DPM++ 2M Karras', 'DPM++ SDE Karras', "DDIM", "PLMS"]
     },
     SEED: {
         "type": int,
@@ -110,6 +110,7 @@ PARAM_CONFIG = {
     }
 }
 
+
 def update_config():
     model_dir = "./stable-diffusion-webui/models/Stable-diffusion/"
     supported_vaes = PARAM_CONFIG[VAE]["supported_values"]
@@ -123,20 +124,21 @@ def update_config():
         elif file.endswith(".safetensors") or file.endswith(".ckpt"):
             supported_models.append(os.path.splitext(file)[0])
 
+
 # special keywords (not config keywords)
-SPECIAL_KEYWORDS = [PREFIX, NEG_PREFIX, GET_PREFIX, GET_NEG_PREFIX, PROMPT, NEG_PROMPT, 
-            RAW_PROMPT, RAW_NEG_PROMPT, GET_MODELS, GET_VAES, GET_LORAS, GET_EMBEDDINGS]
+SPECIAL_KEYWORDS = [PREFIX, NEG_PREFIX, GET_PREFIX, GET_NEG_PREFIX, PROMPT, NEG_PROMPT,
+                    RAW_PROMPT, RAW_NEG_PROMPT, GET_MODELS, GET_VAES, GET_LORAS, GET_EMBEDDINGS]
 
 
+# some consts
 DEFAULT_TOKEN_GEN_RATE = 2
-
 QUEUE_MAX_SIZE = 10
-
 BASE_PORT = 6900
-
 SOFT_DEADLINE = 30
 
 LORAS = []
+EMBEDDINGS = []
+
 
 def update_loras():
     lora_dir = "./stable-diffusion-webui/models/Lora/"
@@ -148,12 +150,12 @@ def update_loras():
         trigger_words = []
         words_path = os.path.join(lora_dir, name + ".words")
         if os.path.isfile(words_path):
-            with open(words_path, "r") as f:
+            with open(words_path, "r", encoding="ascii") as f:
                 trigger_words += [line.strip() for line in f.readlines()]
-        
+
         LORAS.append((name, trigger_words))
 
-EMBEDDINGS = []
+
 def update_embeddings():
     embeddings_dir = "./stable-diffusion-webui/embeddings/"
     for file in os.listdir(embeddings_dir):
@@ -167,10 +169,11 @@ def update_embeddings():
         trigger_words = [name]
         words_path = os.path.join(embeddings_dir, name + ".words")
         if os.path.isfile(words_path):
-            with open(words_path, "r") as f:
+            with open(words_path, "r", encoding="ascii") as f:
                 trigger_words += [line.strip() for line in f.readlines()]
-        
+
         EMBEDDINGS.append((name, trigger_words))
+
 
 update_config()
 update_loras()

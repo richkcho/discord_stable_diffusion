@@ -1,16 +1,17 @@
-from aioprocessing import AioQueue
 import base64
 import io
-from PIL import Image
-from subprocess import Popen
-import queue
-import requests
 import threading
 import time
+from subprocess import Popen
+
+import requests
+from aioprocessing import AioQueue
+from PIL import Image
 
 from modules.consts import *
-from modules.work_item import *
 from modules.locked_list import LockedList
+from modules.work_item import WorkItem
+
 
 class StableDiffusionWebClient(threading.Thread):
     def __init__(self, result_queue: AioQueue, port: int, api_proc: Popen):

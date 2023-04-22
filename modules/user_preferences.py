@@ -1,5 +1,6 @@
-import threading
 import json
+import threading
+
 
 class UserPreferences:
     def __init__(self, preferences = {}):

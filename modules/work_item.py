@@ -1,5 +1,6 @@
 import time
 
+
 class WorkItem:
     def __init__(self, model: str, vae: str, prompt: str, neg_prompt: str, width: int, height: int, steps: int, cfg: float, sampler: str, seed: int, batch_size: int, message_id: int):
         self.model = model
@@ -19,7 +20,10 @@ class WorkItem:
         self.scale = 1
         self.images = []
         self.error_message = "unknown error"
-    
+        self.upscaler = None
+        self.highres_steps = None
+        self.denoising_str = None
+
     def set_highres(self, scale: float, upscaler: str, highres_steps: int, denoising_str: float):
         self.scale = scale
         self.upscaler = upscaler

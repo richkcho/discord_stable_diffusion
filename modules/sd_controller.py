@@ -1,10 +1,16 @@
-from aioprocessing import AioQueue
 from subprocess import Popen
-import torch
+import time
 from typing import List, Dict, Tuple
 
-from modules.consts import *
-from modules.sd_web_client import *
+from aioprocessing import AioQueue
+import queue
+import threading
+import torch
+
+from modules.consts import PARAM_CONFIG, MODEL, BASE_PORT, SOFT_DEADLINE, QUEUE_MAX_SIZE
+from modules.sd_web_client import StableDiffusionWebClient
+from modules.locked_list import LockedList
+from modules.work_item import WorkItem
 
 class StableDiffusionController(threading.Thread):
     '''
@@ -39,13 +45,13 @@ class StableDiffusionController(threading.Thread):
         self.stopped = True
 
     def _attach_worker_to_queue(self, worker: StableDiffusionWebClient, model: str):
-        for _, (_, l) in self.queues.items():
-            if worker in l:
-                l.remove(worker)
+        for _, (_, worker_list) in self.queues.items():
+            if worker in worker_list:
+                worker_list.remove(worker)
 
-        q, l = self.queues[model]
-        worker.attach_to_queue(q)
-        l.append(worker)
+        work_queue, worker_list = self.queues[model]
+        worker.attach_to_queue(work_queue)
+        worker_list.append(worker)
 
     def _pull_work_item(self) -> WorkItem | None:
         try:
@@ -54,32 +60,38 @@ class StableDiffusionController(threading.Thread):
             return None
             
     def _schedule_queues(self):
-        def oldest_work_item(queue: LockedList[WorkItem], now: float) -> float:
-            with queue.lock:
-                if queue.list:
-                    return queue.list[0].creation_time
+        def oldest_work_item(work_queue: LockedList[WorkItem], now: float) -> float:
+            with work_queue.lock:
+                if work_queue.list:
+                    return work_queue.list[0].creation_time
             
             return now
     
+        # make shallow copy of workers, since we want a local mutable copy
+        available_workers = self.workers.copy()
+
         # examine queues, find late queues and free workers (workers on empty queues)
         late_queues: List[Tuple[float, str]] = []
         workable_queues: List[Tuple[float, int, str]] = []
         free_workers: List[StableDiffusionWebClient] = []
         now = time.time()
-        for model, (queue, workers) in self.queues.items():
-            qsize = queue.size()
-            latency = now - oldest_work_item(queue, now)
-            if latency > SOFT_DEADLINE and len(workers) == 0:
-                late_queues.append((latency, model))
-            elif qsize > 0:
-                workable_queues.append((latency, qsize, model))
-            elif qsize == 0 and len(workers) > 0:
+        for model, (work_queue, workers) in self.queues.items():
+            wqsize = work_queue.size()
+            latency = now - oldest_work_item(work_queue, now)
+            if latency > SOFT_DEADLINE:
+                if len(workers) == 0:
+                    late_queues.append((latency, model))
+                else:
+                    # workers already working on a late queue should not be available for reprioritization
+                    for worker in workers:
+                        available_workers.remove(worker)
+            elif wqsize > 0:
+                workable_queues.append((latency, wqsize, model))
+            elif wqsize == 0 and len(workers) > 0:
                 free_workers += workers
-        
-        # only swap workers once per iteration
-        available_workers = self.workers.copy()
 
         # free workers first go to late queues, then to queues most likely to miss deadline
+        # workers moved once here should not be available for reprioritization in the same scheduling cycle
         late_queues.sort(key=lambda x: x[0])
         workable_queues.sort(key=lambda x: x[0] * 5 + x[1])
         for worker in free_workers:
@@ -91,9 +103,10 @@ class StableDiffusionController(threading.Thread):
                 _, _, model = workable_queues.pop()
                 self._attach_worker_to_queue(worker, model)
                 available_workers.remove(worker)
-        
-        # if we still have late queues, need to pull additional workers from currently processing queues
-        available_workers.sort(key=lambda w: oldest_work_item(w.get_queue(), now))
+
+        # if we still have late queues, need to pull additional workers from available workers
+        available_workers.sort(
+            key=lambda w: oldest_work_item(w.get_queue(), now))
         for _, model in late_queues:
             if available_workers:
                 worker = available_workers.pop(0)
