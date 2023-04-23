@@ -1,16 +1,18 @@
-from subprocess import Popen
-import time
-from typing import List, Dict, Tuple
-
-from aioprocessing import AioQueue
 import queue
 import threading
-import torch
+import time
+from subprocess import Popen
+from typing import Dict, List, Tuple
 
-from modules.consts import PARAM_CONFIG, MODEL, BASE_PORT, SOFT_DEADLINE, QUEUE_MAX_SIZE
-from modules.sd_web_client import StableDiffusionWebClient
+import torch
+from aioprocessing import AioQueue
+
+from modules.consts import (BASE_PORT, MODEL, PARAM_CONFIG, QUEUE_MAX_SIZE,
+                            SOFT_DEADLINE)
 from modules.locked_list import LockedList
+from modules.sd_web_client import StableDiffusionWebClient
 from modules.work_item import WorkItem
+
 
 class StableDiffusionController(threading.Thread):
     '''
@@ -55,7 +57,7 @@ class StableDiffusionController(threading.Thread):
 
     def _pull_work_item(self) -> WorkItem | None:
         try:
-            return self.work_queue.get(timeout=1)
+            return self.work_queue.get(timeout=.5)
         except queue.Empty:
             return None
             
@@ -118,10 +120,13 @@ class StableDiffusionController(threading.Thread):
             total += q.size()
         return total
 
+    def _device_count(self):
+        return torch.cuda.device_count()
+
     def run(self):
         models = PARAM_CONFIG[MODEL]["supported_values"]
 
-        for gpu_id in range(torch.cuda.device_count()):
+        for gpu_id in range(self._device_count()):
             self._start_worker(gpu_id)
         
         # attach workers to queues according to current model

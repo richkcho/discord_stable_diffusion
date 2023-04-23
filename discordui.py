@@ -1,14 +1,15 @@
-import aioprocessing
-import discord
+import asyncio
 import os
 import threading
 import time
 
-from modules.consts import *
-from modules.discord_config import *
-from modules.sd_discord_client import *
-from modules.user_preferences import *
-from modules.sd_controller import *
+import discord
+from aioprocessing import AioQueue
+
+from modules.discord_config import load_config
+from modules.sd_controller import StableDiffusionController
+from modules.sd_discord_client import StableDiffusionDiscordClient
+from modules.user_preferences import load_preferences, save_preferences
 
 # worker to log into discord and create work items
 
@@ -30,38 +31,13 @@ def discord_worker(work_queue, result_queue, preferences, config):
     client.run(api_key)
 
 
-def test():
-    work_queue = aioprocessing.AioQueue()
-    result_queue = aioprocessing.AioQueue()
-
-    web_client = StableDiffusionWebClient(result_queue, 7860, None)
-    web_client.attach_to_queue(work_queue)
-    web_client.start()
-
-    test_prompt = "((masterpiece)), ((best quality)), perfect body, ahri"
-    test_neg_prompt = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, missing fingers, bad hands, missing arms, extra arms, extra legs, distortion, censor, distorted face"
-    test_item = WorkItem("anythingV5", "kl-f8-anime2.vae.pt", test_prompt,
-                         test_neg_prompt, 512, 512, 26, 11.5, "DPM++ SDE Karras", -1, 1, 123)
-    test_item.set_highres(2, "R-ESRGAN 4x+ Anime6B", 10, 0.7)
-    work_queue.put(test_item)
-
-    while True:
-        try:
-            time.sleep(10)
-        except KeyboardInterrupt:
-            break
-
-    web_client.stop()
-    web_client.join()
-
-
 def main():
     preferences_file = "user_prefixes.json"
     config_file = "discord_config.json"
 
     # work queue
-    work_queue = aioprocessing.AioQueue()
-    result_queue = aioprocessing.AioQueue()
+    work_queue = AioQueue()
+    result_queue = AioQueue()
 
     # load user prefixes
     preferences = load_preferences(preferences_file)
