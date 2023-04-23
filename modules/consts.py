@@ -83,13 +83,13 @@ PARAM_CONFIG = {
     WIDTH: {
         "type": int,
         "default": 512,
-        "min": 512,
+        "min": 256,
         "max": 1024
     },
     HEIGHT: {
         "type": int,
         "default": 512,
-        "min": 512,
+        "min": 256,
         "max": 1024
     },
     BATCH_SIZE: {
