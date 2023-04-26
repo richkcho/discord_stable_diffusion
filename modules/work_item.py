@@ -2,7 +2,7 @@ import time
 
 
 class WorkItem:
-    def __init__(self, model: str, vae: str, prompt: str, neg_prompt: str, width: int, height: int, steps: int, cfg: float, sampler: str, seed: int, batch_size: int, message_id: int):
+    def __init__(self, model: str, vae: str, prompt: str, neg_prompt: str, width: int, height: int, steps: int, cfg: float, sampler: str, seed: int, batch_size: int, context_handle: str):
         self.model = model
         self.vae = vae
         self.prompt = prompt
@@ -14,7 +14,7 @@ class WorkItem:
         self.sampler = sampler
         self.seed = seed
         self.batch_size = batch_size
-        self.message_id = message_id
+        self.context_handle = context_handle
         self.creation_time = time.time()
 
         self.scale = 1

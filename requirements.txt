@@ -1,0 +1,4 @@
+aioprocessing
+Pillow
+py-cord
+torch

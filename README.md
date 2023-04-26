@@ -1,16 +1,14 @@
 # Discord UI for stable-diffusion-webui
 
 ## Commands
-See `modules/consts.py` for a list of commands. Some keywords are "special" in that they are not associated 
-with any configuration. Most commands are to set configuration for a single prompt query, or to set your personal 
-default for a configuration parameter. 
+Supported slash commands:
+* /set_preferences
+* /get_preferences
+* /info
+* /generate
+* /again
 
-The format of a discord message is of newline separated `<keyword>: <string>` pairs. For example,
-```
-prompt: <some prompt here>
-neg-prompt: <the negative prompt>
-<config>: <value>
-```
+Each of these commands come with a small description, please read those. 
 
 ## Multi-GPU support
 For higher throughput, this ui supports multiple GPUs on a single computer. In theory this can be extended for 

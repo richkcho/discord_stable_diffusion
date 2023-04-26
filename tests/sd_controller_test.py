@@ -21,7 +21,7 @@ def test_sd_controller_scheduling():
     item_count = 100
     for i in range(item_count):
         work_item = WorkItem(random.choice(PARAM_CONFIG[MODEL]["supported_values"]), "foo",
-                             "prompt", "neg-prompt", 512, 512, 30, 7, "Euler", 1, 1, i)
+                             "prompt", "neg-prompt", 512, 512, 30, 7, "Euler", 1, 1, str(i))
         work_item.creation_time -= random.randint(0, SOFT_DEADLINE)
         work_queue.put(work_item)
 
@@ -45,8 +45,8 @@ def test_sd_controller_scheduling():
     # honestly I just made this /2 up, probably should make this better
     assert sd_controller.total_context_switch_count() < item_count / 2
 
-    expected_message_ids = list(range(item_count))
+    expected_context_handles = [str(i) for i in range(item_count)]
     while not result_queue.empty():
         work_item = result_queue.get()
-        assert work_item.message_id in expected_message_ids
-        expected_message_ids.remove(work_item.message_id)
+        assert work_item.context_handle in expected_context_handles
+        expected_context_handles.remove(work_item.context_handle)

@@ -1,6 +1,7 @@
 import json
+from typing import List
 
-from modules.consts import *
+from modules.consts import DEFAULT_IN_FLIGHT_GEN_CAP
 
 
 class DiscordConfig:
@@ -11,9 +12,15 @@ class DiscordConfig:
                 "config lacks supported channels, bot will not do much")
 
     def check_dict_try_get(self, key, outer_key, config: dict):
-        if outer_key in config and key in config[outer_key]:
-            return config[outer_key][key]
+        if outer_key in config:
+            if key is None:
+                return config[outer_key]
+            elif key in config[outer_key]:
+                return config[outer_key][key]
         return None
+
+    def get_channels(self) -> List[str]:
+        return [int(s) for s in self.config["channels"].keys()]
 
     def get_channel_dict(self, channel_id: int) -> dict:
         channel = str(channel_id)
@@ -27,32 +34,27 @@ class DiscordConfig:
 
         return False
 
-    def get_token_rate(self, user: int, channel_id: int) -> float:
+    def in_flight_gen_cap(self, user: int, channel_id: int) -> int:
         user = str(user)
-        channel_dict = self.get_channel_dict(channel_id)
 
-        # attempt to get specific rate for user + channel
-        rate = self.check_dict_try_get(user, "token_rate", channel_dict)
-
-        # fall back to specific rate for user
-        if rate is None:
-            rate = self.check_dict_try_get(user, "token_rate", self.config)
+        # try to get specific rate for user
+        cap = self.check_dict_try_get(user, "in_flight_cap", self.config)
 
         # fall back to specific rate for channel
-        if rate is None:
-            rate = self.check_dict_try_get(
-                "default", "token_rate", channel_dict)
+        if cap is None:
+            cap = self.check_dict_try_get(
+                "in_flight_cap", str(channel_id), self.config["channels"])
 
         # check if global default rate is set
-        if rate is None:
-            rate = self.check_dict_try_get(
-                "default", "token_rate", self.config)
+        if cap is None:
+            cap = self.check_dict_try_get(
+                "default", "in_flight_cap", self.config)
 
-        if rate is not None:
-            return rate
+        if cap is not None:
+            return cap
 
         # fall back to global hardcoded default rate
-        return DEFAULT_TOKEN_GEN_RATE
+        return DEFAULT_IN_FLIGHT_GEN_CAP
 
     def channel_requires_spoiler_tag(self, channel_id: int) -> bool:
         channel_dict = self.get_channel_dict(channel_id)
@@ -66,6 +68,6 @@ class DiscordConfig:
         return self.config
 
 
-def load_config(path) -> DiscordConfig:
-    with open(path, "r", encoding="ascii") as f:
+def load_config(path: str) -> DiscordConfig:
+    with open(path, "r", encoding="utf-8") as f:
         return DiscordConfig(json.load(f))
