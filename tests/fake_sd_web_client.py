@@ -67,4 +67,4 @@ class FakeStableDiffusionWebClient(StableDiffusionWebClient):
         while not self.stop:
             work_item = self._pull_work_item()
             self._process_work_item(work_item)
-            self.result_queue.put(work_item)
+            self._result_queue.put(work_item)

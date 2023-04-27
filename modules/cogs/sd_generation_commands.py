@@ -216,7 +216,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
 
         await self._process_request(ctx, prompt, negative_prompt, **values)
 
-    @discord.slash_command(description="generate with previously used values. Set seed to -1 for a new seed. (some params can be overridden with optional args)")
+    @discord.slash_command(description="generate with previously used values. Any options will override previous values.")
     @commands.cooldown(1, 1, commands.BucketType.user)
     @async_add_arguments(DISCORD_ARG_DICT_NO_PREFIX)
     async def again(self, ctx: discord.ApplicationContext, **override_values: dict) -> None:
