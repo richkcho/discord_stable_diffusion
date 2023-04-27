@@ -177,7 +177,9 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
     async def generate(self, ctx: discord.ApplicationContext,
                        prompt: discord.Option(str, required=True, description=PROMPT_DESC),
                        negative_prompt: discord.Option(str, default="", description=NEG_PROMPT_DESC),
-                       skip_prefixes: discord.Option(bool, default=False, description="Do not add prefixes to prompt and negative prompt"),
+                       skip_prefixes: discord.Option(bool, default=False, description="Do not add prefixes to prompt and negative prompt. Overrides skip_prefix and skip_neg_prefix"),
+                       skip_prefix: discord.Option(bool, default=False, description="Do not add prefix to prompt"),
+                       skip_neg_prefix: discord.Option(bool, default=False, description="Do not add negative prefix to prompt"),
                        **values: dict) -> None:
         """
         A slash command that generates images using Stable Diffusion. See DISCORD_ARG_DICT for what options can be 
@@ -207,9 +209,10 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
 
             values[name] = value
 
-        prompt = ("" if skip_prefixes else values[PREFIX] + ", ") + prompt
+        prompt = (
+            "" if skip_prefix or skip_prefixes else values[PREFIX] + ", ") + prompt
         negative_prompt = (
-            "" if skip_prefixes else values[NEG_PREFIX] + ", ") + negative_prompt
+            "" if skip_neg_prefix or skip_prefixes else values[NEG_PREFIX] + ", ") + negative_prompt
 
         await self._process_request(ctx, prompt, negative_prompt, **values)
 
