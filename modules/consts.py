@@ -1,3 +1,11 @@
+"""
+This module contains the main constants used by other modules.
+
+Chatgpt could just copy-paste the descriptions I already wrote for these parameters, but I figure its better to not do
+that. Just read the consts, they're named pretty directly and are self explanatory. 
+"""
+
+
 import os
 
 # labels for commands
@@ -46,7 +54,8 @@ PARAM_CONFIG = {
     CFG: {
         "type": float,
         "default": 8,
-        "description": "classifier free guidance, higher values force the image generation to be \"closer\" to the prompt",
+        "description":
+            "classifier free guidance, higher values force the image generation to be \"closer\" to the prompt",
         "min": 0,
         "max": 30
     },
@@ -129,6 +138,16 @@ PARAM_CONFIG = {
 
 
 def update_config():
+    """
+    Updates the configuration parameters for the stable diffusion model based on the available files in the 
+    model directory. It adds the supported vae and model names to the corresponding lists in PARAM_CONFIG.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     model_dir = "./stable-diffusion-webui/models/Stable-diffusion/"
     supported_vaes = PARAM_CONFIG[VAE]["supported_values"]
     supported_models = PARAM_CONFIG[MODEL]["supported_values"]
@@ -156,6 +175,15 @@ EMBEDDINGS = []
 
 
 def update_loras():
+    """
+    Updates the Lora models and their associated trigger words.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     lora_dir = "./stable-diffusion-webui/models/Lora/"
     for file in os.listdir(lora_dir):
         if not os.path.isfile(os.path.join(lora_dir, file)) or not file.endswith(".safetensors"):
@@ -172,6 +200,15 @@ def update_loras():
 
 
 def update_embeddings():
+    """
+    Updates the available embeddings and their associated trigger words.
+
+    Args:
+        None
+
+    Returns:
+        None.
+    """
     embeddings_dir = "./stable-diffusion-webui/embeddings/"
     for file in os.listdir(embeddings_dir):
         if not os.path.isfile(os.path.join(embeddings_dir, file)):

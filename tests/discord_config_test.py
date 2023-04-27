@@ -1,3 +1,10 @@
+"""
+Test module for the DiscordConfig class and load_config function.
+
+Functions:
+- test_sample_config: Tests the initialization and methods of a DiscordConfig object with a sample configuration.
+- test_sample_config_load: Tests the loading of a configuration file with the load_config function.
+"""
 
 import json
 import os
@@ -36,6 +43,13 @@ SAMPLE_CONFIG = {
 
 
 def test_sample_config():
+    """
+    Tests the initialization and methods of a DiscordConfig object with a sample configuration.
+    Asserts that the configuration has the correct number of channels and that is_supported_channel method returns True
+    for these channels.
+    Asserts that channel_requires_spoiler_tag method returns True only for channel 3, which has that property set. 
+    Asserts that in_flight_gen_cap method returns the expected values for different users and channels.
+    """
     config = DiscordConfig(SAMPLE_CONFIG)
 
     # we have channels 0-4
@@ -73,6 +87,11 @@ def test_sample_config():
 
 
 def test_sample_config_load():
+    """
+    Tests the loading of a configuration file with the load_config function.
+    Creates a temporary file with a sample configuration, loads the configuration with load_config,
+    and asserts that the loaded configuration is equal to the original sample configuration.
+    """
     test_path = "test_config.json"
     with open(test_path, "w", encoding="utf-8") as f:
         json.dump(SAMPLE_CONFIG, f)

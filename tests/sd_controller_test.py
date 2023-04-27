@@ -1,3 +1,10 @@
+"""
+Tests for the Stable Diffusion Controller.
+
+Functions:
+- test_sd_controller_scheduling: Tests the scheduling algorithm of the Stable Diffusion Controller.
+"""
+
 import random
 import time
 
@@ -10,6 +17,10 @@ from .fake_sd_controller import FakeStableDiffusionController
 
 
 def test_sd_controller_scheduling():
+    """
+    Tests the scheduling, in a somewhat potato way. We have very rough bounds on total time spent and context switches
+    made, as well as checking that no work items were dropped. 
+    """
     work_queue = AioQueue()
     result_queue = AioQueue()
     num_workers = 4
@@ -25,13 +36,13 @@ def test_sd_controller_scheduling():
         work_item.creation_time -= random.randint(0, SOFT_DEADLINE)
         work_queue.put(work_item)
 
-    # each work item should be prcessed in under 2 seconds, and workers should process in parallel
+    # each work item should be processed in under 2 seconds, and workers should process in parallel
     time_limit = time.time() + (item_count * 2) / num_workers + 1
     while not work_queue.empty() and time.time() < time_limit:
         time.sleep(0.5)
 
     # stop workers first, asserts in main thread when workers are running cause test to hang
-    sd_controller.stop()
+    sd_controller.stop = True
     sd_controller.join()
 
     # check for reattach spam, realistically we should not be moving workers between queues more than once per item

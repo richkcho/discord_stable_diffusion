@@ -43,4 +43,5 @@ def make_arg_dict(skip: List[str] = []) -> dict:
 
 
 DISCORD_ARG_DICT = make_arg_dict()
-DISCORD_ARG_DICT_NO_PREFIX = make_arg_dict([modules.consts.PREFIX, modules.consts.NEG_PREFIX])
+DISCORD_ARG_DICT_NO_PREFIX = make_arg_dict(
+    [modules.consts.PREFIX, modules.consts.NEG_PREFIX])

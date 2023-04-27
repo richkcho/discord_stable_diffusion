@@ -1,3 +1,14 @@
+"""
+This module contains the `DiscordUserPreferenceCommands` class, which implements Discord slash commands
+for managing user preferences.
+
+Functions:
+    setup(bot: StableDiffusionDiscordBot) -> None: Adds user preferences slash commands to the given discord bot.
+
+Classes:
+    DiscordUserPreferenceCommands(commands.Cog): A class that implements Discord slash commands for managing user
+        preferences.
+"""
 import discord
 from discord.ext import commands
 
@@ -7,12 +18,40 @@ from modules.utils import async_add_arguments
 
 
 class DiscordUserPreferenceCommands(commands.Cog):
+    """
+    A class that implements Discord slash commands for managing user preferences.
+
+    Args:
+        bot (StableDiffusionDiscordBot): The Discord bot instance to use.
+
+    Methods:
+        get_preferences(ctx: discord.ApplicationContext) -> None:
+            Retrieves the preferences of the calling user, if it is set.
+
+            Args:
+                ctx (discord.ApplicationContext): The context of the command.
+
+        set_preferences(ctx: discord.ApplicationContext, **kwargs: dict) -> None:
+            Sets the default preferences of the calling user based on the provided keyword arguments. Possible values 
+            for kwargs are enumerated in DISCORD_ARG_DICT, as well as argument defaults and descriptions. 
+
+            Args:
+                ctx (discord.ApplicationContext): The context of the command.
+                **kwargs (dict): The keyword arguments containing the preferences to set.
+    """
+
     def __init__(self, bot: StableDiffusionDiscordBot):
         self.bot: StableDiffusionDiscordBot = bot
 
-    @discord.slash_command(description="Retrieves users default preferences")
+    @discord.slash_command(description="Retrieves users preferences")
     @commands.cooldown(1, 1, commands.BucketType.user)
     async def get_preferences(self, ctx: discord.ApplicationContext) -> None:
+        """
+        Retrieves the preferences of the calling user, if it is set.
+
+        Args:
+            ctx (discord.ApplicationContext): The context of the command.
+        """
         if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
             return await ctx.respond("Unsupported text channel")
 
@@ -28,6 +67,14 @@ class DiscordUserPreferenceCommands(commands.Cog):
     @commands.cooldown(1, 1, commands.BucketType.user)
     @async_add_arguments(DISCORD_ARG_DICT)
     async def set_preferences(self, ctx: discord.ApplicationContext, **kwargs: dict) -> None:
+        """
+        Sets the default preferences of the calling user based on the provided keyword arguments. Possible values for 
+        kwargs are enumerated in DISCORD_ARG_DICT, as well as argument defaults and descriptions. 
+
+        Args:
+            ctx (discord.ApplicationContext): The context of the command.
+            **kwargs (dict): The keyword arguments containing the preferences to set.
+        """
         if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
             return await ctx.respond("Unsupported text channel")
 
@@ -45,4 +92,10 @@ class DiscordUserPreferenceCommands(commands.Cog):
 
 
 def setup(bot: StableDiffusionDiscordBot):
+    """
+    Adds user preferences slash commands to the given discord bot.
+
+    Args:
+        bot (StableDiffusionDiscordBot): The Discord bot instance to use.
+    """
     bot.add_cog(DiscordUserPreferenceCommands(bot))

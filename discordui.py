@@ -1,3 +1,14 @@
+"""
+Module containing the Discord UI functionality.
+
+This module provides the main entry point for running the Discord user interface, which allows users to interact with 
+the system by sending messages to a Discord bot. It includes functions for loading user preferences and configuration 
+data, starting the Discord bot, and managing the work queue.
+
+Functions:
+- discord_worker: Starts the Discord bot.
+- main: Main entry point for running the Discord UI.
+"""
 import asyncio
 import os
 import threading
@@ -12,6 +23,20 @@ from modules.sd_discord_bot import StableDiffusionDiscordBot
 
 
 def discord_worker(work_queue: AioQueue, result_queue: AioQueue, preferences: UserPreferences, config: DiscordConfig):
+    """
+    Starts the Discord bot.
+
+    This function sets up the Discord bot using the given preferences and configuration data and runs it using the
+    specified work queue and result queue. This function does not return. 
+
+    Parameters:
+    - work_queue (AioQueue): A queue for incoming work items.
+    - result_queue (AioQueue): A queue for outgoing results.
+    - preferences (UserPreferences): The user preferences to use.
+    - config (DiscordConfig): The configuration data to use.
+
+    Returns: None
+    """
     api_key = os.environ.get("DISCORD_API_KEY")
     if api_key is None:
         print("Please set DISCORD_API_KEY before use")
@@ -26,6 +51,14 @@ def discord_worker(work_queue: AioQueue, result_queue: AioQueue, preferences: Us
 
 
 def main():
+    """
+    Main entry point for running the Discord UI.
+
+    This function loads the user preferences and configuration data, starts the Discord bot, and manages the work queue.
+    It runs until it is terminated by the user.
+
+    Returns: None
+    """
     preferences_file = "user_prefixes.json"
     config_file = "discord_config.json"
 
@@ -54,7 +87,7 @@ def main():
             save_preferences(preferences, preferences_file)
             break
 
-    sd_controller.stop()
+    sd_controller.stop = True
     sd_controller.join()
 
 

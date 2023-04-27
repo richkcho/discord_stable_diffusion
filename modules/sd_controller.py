@@ -1,3 +1,13 @@
+"""
+This module contains a controller for StableDiffusionWebClients. The controller manages queues
+of work items, assigns workers to the queues, and schedules the work.
+
+Classes:
+- StableDiffusionController: a controller for StableDiffusionWebClients.
+
+Functions:
+None.
+"""
 import queue
 import threading
 import time
@@ -15,20 +25,43 @@ from modules.work_item import WorkItem
 
 
 class StableDiffusionController(threading.Thread):
-    '''
-    Manages StableDiffusionWebClients. 
-    '''
+    """A controller for StableDiffusionWebClients.
+
+    The controller manages queues of work items, assigns workers to the queues, and schedules the work.
+
+    Attributes:
+    - workers (List[StableDiffusionWebClient]): the list of workers.
+    - queues (Dict[str, Tuple[LockedList[WorkItem], List[StableDiffusionWebClient]]]): a dictionary
+      that maps a model name to a tuple of a work item queue and a list of workers who are working on the queue.
+    - work_queue (AioQueue): the work item queue.
+    - result_queue (AioQueue): the result queue.
+    - stop (bool): a flag indicating whether the controller should stop.
+
+    Methods:
+    - run(self): runs the controller.
+    """
     def __init__(self, work_queue: AioQueue, result_queue: AioQueue) -> None:
+        """Initializes a new StableDiffusionController object.
+
+        Args:
+        - work_queue (AioQueue): the work item queue.
+        - result_queue (AioQueue): the result queue.
+        """
         super().__init__()
         self.workers: List[StableDiffusionWebClient] = []
         self.queues: Dict[str, Tuple[LockedList[WorkItem], List[StableDiffusionWebClient]]] = {}
         self.work_queue = work_queue
         self.result_queue = result_queue
-        self.stopped = False
+        self.stop = False
 
         self._initialize_queues()
-    
+
     def _start_worker(self, device_id: int):
+        """Starts a worker.
+
+        Args:
+        - device_id (int): the ID of the GPU to use.
+        """
         port = BASE_PORT + device_id
         cmd = ["python", "launch.py", "--device-id", str(device_id), "--port", str(port), "--api", "--xformers"]
 
@@ -37,16 +70,23 @@ class StableDiffusionController(threading.Thread):
         worker.start()
 
         self.workers.append(worker)
-    
+
     def _initialize_queues(self):
+        """
+        Initialize per-model queues for processing work items 
+        """
         models = PARAM_CONFIG[MODEL]["supported_values"]
         for model in models:
             self.queues[model] = (LockedList[WorkItem](), [])
 
-    def stop(self):
-        self.stopped = True
-
     def _attach_worker_to_queue(self, worker: StableDiffusionWebClient, model: str):
+        """
+        Attaches a worker to the queue for a given model. 
+
+        Args:
+        - worker (StableDiffusionWebClient): a worker.
+        - model (str): the model name.
+        """
         for _, (_, worker_list) in self.queues.items():
             if worker in worker_list:
                 worker_list.remove(worker)
@@ -56,19 +96,29 @@ class StableDiffusionController(threading.Thread):
         worker_list.append(worker)
 
     def _pull_work_item(self) -> WorkItem | None:
+        """
+        Pull a work item from the work queue.
+
+        Returns:
+            work_item (WorkItem): The retrieved work item.
+        """
         try:
             return self.work_queue.get(timeout=.5)
         except queue.Empty:
             return None
-            
+
     def _schedule_queues(self):
+        """
+        Schedules the queues for work by workers. Attempts to minimize switching between queues while soft limiting the 
+        maximum latency of a given generation request. 
+        """
         def oldest_work_item(work_queue: LockedList[WorkItem], now: float) -> float:
             with work_queue.lock:
                 if work_queue.list:
                     return work_queue.list[0].creation_time
-            
+
             return now
-    
+
         # make shallow copy of workers, since we want a local mutable copy
         available_workers = self.workers.copy()
 
@@ -115,20 +165,35 @@ class StableDiffusionController(threading.Thread):
                 self._attach_worker_to_queue(worker, model)
 
     def _pending_work_count(self) -> int:
+        """
+        Returns the number of pending work items.
+
+        Returns:
+        - count (int): the number of pending work items.
+        """
         total = 0
         for _, (q, _) in self.queues.items():
             total += q.size()
         return total
 
     def _device_count(self):
+        """
+        Returns the number of GPUs.
+
+        Returns:
+        - count (int): the number of GPUs.
+        """
         return torch.cuda.device_count()
 
     def run(self):
+        """
+        Runs the controller.
+        """
         models = PARAM_CONFIG[MODEL]["supported_values"]
 
         for gpu_id in range(self._device_count()):
             self._start_worker(gpu_id)
-        
+
         # attach workers to queues according to current model
         for worker in self.workers:
             while worker.get_model() is None:
@@ -137,10 +202,10 @@ class StableDiffusionController(threading.Thread):
             worker_model = worker.get_model()
             if worker_model not in models:
                 worker_model = models[0]
-            
+
             self._attach_worker_to_queue(worker, worker_model)
 
-        while not self.stopped:
+        while not self.stop:
             # drain work queue if we have capacity
             while self._pending_work_count() < QUEUE_MAX_SIZE:
                 work_item = self._pull_work_item()
@@ -148,12 +213,12 @@ class StableDiffusionController(threading.Thread):
                     break
 
                 self.queues[work_item.model][0].put(work_item)
-            
+
             self._schedule_queues()
-        
+
         for worker in self.workers:
-            worker.stop()
-        
+            worker.stop = True
+
         for worker in self.workers:
             worker.join()
             
