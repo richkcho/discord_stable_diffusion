@@ -7,7 +7,7 @@ import time
 
 class WorkItem:
     """
-    The WorkItem class represents an item of work to be processed by a high-resolution image generation system.
+    The WorkItem class represents an item of work to be processed by stable diffusion.
 
     Attributes:
         - model (str): the name of the model to use for image generation.
@@ -66,12 +66,17 @@ class WorkItem:
         self.context_handle = context_handle
         self.creation_time = time.time()
 
-        self.scale = 1
-        self.images = []
         self.error_message = "unknown error"
+
+        self.scale = 1
         self.upscaler = None
         self.highres_steps = None
         self.denoising_str = None
+
+        self.image_b64 = None
+        self.resize_mode = 0
+
+        self.images = []
 
     def set_highres(self, scale: float, upscaler: str, highres_steps: int, denoising_str: float):
         """
@@ -87,3 +92,16 @@ class WorkItem:
         self.upscaler = upscaler
         self.highres_steps = highres_steps
         self.denoising_str = denoising_str
+
+    def set_image(self, image_b64: str, denoising_str: float, resize_mode: int):
+        """
+        Set the parameters for img2img
+
+        Args:
+            image_b64 (str): the base64 encoded image
+            denoising_str (float): The denoising strength to use.
+            resize_mode (int): The resize mode to use(see consts).
+        """
+        self. image_b64 = image_b64
+        self.denoising_str = denoising_str
+        self.resize_mode = resize_mode

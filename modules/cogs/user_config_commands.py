@@ -12,7 +12,7 @@ Classes:
 import discord
 from discord.ext import commands
 
-from modules.cogs.discord_arg_consts import DISCORD_ARG_DICT
+from modules.cogs.discord_arg_consts import DISCORD_ARG_DICT_ALL
 from modules.sd_discord_bot import StableDiffusionDiscordBot
 from modules.utils import async_add_arguments
 
@@ -65,11 +65,11 @@ class DiscordUserPreferenceCommands(commands.Cog):
 
     @discord.slash_command(description="Set users default preferences")
     @commands.cooldown(1, 1, commands.BucketType.user)
-    @async_add_arguments(DISCORD_ARG_DICT)
+    @async_add_arguments(DISCORD_ARG_DICT_ALL)
     async def set_preferences(self, ctx: discord.ApplicationContext, **kwargs: dict) -> None:
         """
         Sets the default preferences of the calling user based on the provided keyword arguments. Possible values for 
-        kwargs are enumerated in DISCORD_ARG_DICT, as well as argument defaults and descriptions. 
+        kwargs are enumerated in DISCORD_ARG_DICT_ALL, as well as argument defaults and descriptions. 
 
         Args:
             ctx (discord.ApplicationContext): The context of the command.

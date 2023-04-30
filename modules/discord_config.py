@@ -12,7 +12,7 @@ Functions:
 """
 
 import json
-from typing import List
+from typing import List, Optional
 
 from modules.consts import DEFAULT_IN_FLIGHT_GEN_CAP
 
@@ -38,7 +38,7 @@ class DiscordConfig:
 
     """
 
-    def __init__(self, config: dict = {}):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initializes the DiscordConfig object.
 
@@ -49,6 +49,9 @@ class DiscordConfig:
         - ValueError: If the given configuration lacks supported channels.
 
         """
+        if config is None:
+            config = {}
+
         self._config = config
         if "channels" not in config:
             raise ValueError(

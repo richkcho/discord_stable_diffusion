@@ -1,4 +1,6 @@
 aioprocessing
+aiohttp
+aiodns
 Pillow
 py-cord
 torch

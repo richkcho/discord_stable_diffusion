@@ -15,16 +15,17 @@ import io
 import queue
 import random
 import time
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 import discord
 from discord.ext import commands
 
-from modules.cogs.discord_arg_consts import (DISCORD_ARG_DICT,
-                                             DISCORD_ARG_DICT_NO_PREFIX)
+from modules.cogs.discord_arg_consts import (DISCORD_ARG_DICT_IMG2IMG,
+                                             DISCORD_ARG_DICT_TXT2IMG)
 from modules.consts import *
 from modules.sd_discord_bot import StableDiffusionDiscordBot
-from modules.utils import async_add_arguments, max_batch_size
+from modules.utils import (async_add_arguments, b64encode_image,
+                           download_image, max_batch_size)
 from modules.work_item import WorkItem
 
 
@@ -51,7 +52,6 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         self.response_task = asyncio.get_event_loop().create_task(self._send_responses())
         self.in_flight_commands: Dict[str, discord.ApplicationContext] = {}
         self.user_in_flight_gen_count: Dict[int, int] = {}
-        self.prev_request: Dict[(int, int), (str, str, dict)] = {}
 
     async def _send_responses(self):
         """
@@ -115,12 +115,14 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if self.active_channels[channel.id] == 1:
             asyncio.get_event_loop().create_task(typer(self.active_channels, channel))
 
-    async def _process_request(self, ctx: discord.ApplicationContext, prompt: str, negative_prompt: str, **values: dict):
+    async def _process_request(self, ctx: discord.ApplicationContext, prompt: str, negative_prompt: str, image_url: Optional[str] = None, **values: dict):
         """
         Processes a request to generate images using Stable Diffusion.
 
         Args:
             ctx (discord.ApplicationContext): The context of the command.
+            prefix (str): the prefix to prepend to the prompt
+            negative_prefix (str): the prefix the prepend t the negative prompt
             prompt (str): The prompt to use for image generation.
             negative_prompt (str): The negative prompt to use for image generation.
             **values (dict): The arguments for the image generation.
@@ -140,6 +142,27 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if self.bot.sd_work_queue.qsize() > QUEUE_MAX_SIZE:
             return await ctx.respond("Work queue is at maximum size, please wait before making your next request")
 
+        # img2img: validate image, update image size to image if autosize is set
+        image_b64 = None
+        if image_url:
+            image = await download_image(image_url)
+            if image is None:
+                return await ctx.respond("Unable to retrieve image (bad file type or image no longer exists)")
+            image_b64 = b64encode_image(image)
+
+            # if autosize, set width and height accordingly (only applies in img2img)
+            if values[AUTOSIZE]:
+                autosize_max = values[AUTOSIZE_MAXSIZE]
+                max_dim = max(image.size)
+                ratio = autosize_max / max_dim
+                values[WIDTH], values[HEIGHT] = [
+                    int(ratio * dim) for dim in image.size]
+
+        # set these to default "no-op" values if not set
+        if SCALE not in values:
+            values[SCALE] = 1
+            values[UPSCALER] = "Latent"
+
         # validate batch size
         values[BATCH_SIZE] = min(values[BATCH_SIZE], max_batch_size(
             values[WIDTH], values[HEIGHT], values[SCALE], values[UPSCALER]))
@@ -149,6 +172,13 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if values[SEED] == -1:
             values[SEED] = int(random.randrange(4294967294))
 
+        # concatencate prefixes
+        if values[PREFIX] is not None:
+            prompt = values[PREFIX] + ", " + prompt
+
+        if values[NEG_PREFIX] is not None:
+            negative_prompt = values[NEG_PREFIX] + ", " + negative_prompt
+
         ack_message = f"Generating {values[BATCH_SIZE]} images for prompt: {prompt}\n"
         ack_message += f"negative prompt: {negative_prompt}\n"
         ack_message += f"Using model: {values[MODEL]}, vae: {values[VAE]}, image size: {values[WIDTH]}x{values[HEIGHT]}\n"
@@ -156,31 +186,39 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         work_item = WorkItem(values[MODEL], values[VAE], prompt, negative_prompt, values[WIDTH], values[HEIGHT],
                              values[STEPS], values[CFG], values[SAMPLER], values[SEED], values[BATCH_SIZE], command_handle)
 
-        if values[SCALE] > 1:
+        # upscaling and img2img are mutually exclusive (for now?).
+        if image_b64 is not None:
+            ack_message += f"Using img as base, resize mode: {values[RESIZE_MODE]}. Denoising str {values[DENOISING_STR_IMG2IMG]:.2f}"
+            work_item.set_image(
+                image_b64, values[DENOISING_STR_IMG2IMG], resize_mode_str_to_int(values[RESIZE_MODE]))
+        elif values[SCALE] > 1:
             ack_message += f"Using highres upscaler {values[UPSCALER]}, {values[HIGHRES_STEPS]} steps. Denoising str {values[DENOISING_STR]:.2f}\n"
             work_item.set_highres(
                 values[SCALE], values[UPSCALER], values[HIGHRES_STEPS], values[DENOISING_STR])
 
-        self.prev_request[(ctx.channel_id, ctx.author.id)] = (
-            prompt, negative_prompt, values)
-
         self.bot.sd_work_queue.put(work_item)
         self.in_flight_commands[command_handle] = ctx
         self.user_in_flight_gen_count[ctx.author.id] += 1
-        await ctx.respond(ack_message)
+
+        if image_url is not None:
+            embed = discord.Embed()
+            embed.set_image(url=image_url)
+            await ctx.respond(ack_message, embed=embed)
+        else:
+            await ctx.respond(ack_message)
 
         self._handle_typing(ctx.channel)
 
-    @discord.slash_command(description="generate images with stable diffusion")
+    @discord.slash_command(description="generate images from text with stable diffusion")
     @commands.cooldown(1, 1, commands.BucketType.user)
-    @async_add_arguments(DISCORD_ARG_DICT)
-    async def generate(self, ctx: discord.ApplicationContext,
-                       prompt: discord.Option(str, required=True, description=PROMPT_DESC),
-                       negative_prompt: discord.Option(str, default="", description=NEG_PROMPT_DESC),
-                       skip_prefixes: discord.Option(bool, default=False, description="Do not add prefixes to prompt and negative prompt. Overrides skip_prefix and skip_neg_prefix"),
-                       skip_prefix: discord.Option(bool, default=False, description="Do not add prefix to prompt"),
-                       skip_neg_prefix: discord.Option(bool, default=False, description="Do not add negative prefix to prompt"),
-                       **values: dict) -> None:
+    @async_add_arguments(DISCORD_ARG_DICT_TXT2IMG)
+    async def txt2img(self, ctx: discord.ApplicationContext,
+                      prompt: discord.Option(str, required=True, description=PROMPT_DESC),
+                      negative_prompt: discord.Option(str, default="", description=NEG_PROMPT_DESC),
+                      skip_prefixes: discord.Option(bool, default=False, description="Do not add prefixes to prompt and negative prompt. Overrides skip_prefix and skip_neg_prefix"),
+                      skip_prefix: discord.Option(bool, default=False, description="Do not add prefix to prompt"),
+                      skip_neg_prefix: discord.Option(bool, default=False, description="Do not add negative prefix to prompt"),
+                      **values: dict) -> None:
         """
         A slash command that generates images using Stable Diffusion. See DISCORD_ARG_DICT for what options can be 
         passed in **values, and a description of what those options do.
@@ -205,45 +243,71 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
 
             # otherwise fall back to global default
             if value is None:
-                value = PARAM_CONFIG[name]["default"]
+                value = TXT2IMG_CONFIG[name]["default"]
 
             values[name] = value
 
-        prompt = (
-            "" if skip_prefix or skip_prefixes else values[PREFIX] + ", ") + prompt
-        negative_prompt = (
-            "" if skip_neg_prefix or skip_prefixes else values[NEG_PREFIX] + ", ") + negative_prompt
+        if skip_prefix or skip_prefixes:
+            values[PREFIX] = None
+
+        if skip_neg_prefix or skip_prefixes:
+            values[NEG_PREFIX] = None
 
         await self._process_request(ctx, prompt, negative_prompt, **values)
 
-    @discord.slash_command(description="generate with previously used values. Any options will override previous values.")
+    @discord.slash_command(description="generate images using image as base with stable diffusion")
     @commands.cooldown(1, 1, commands.BucketType.user)
-    @async_add_arguments(DISCORD_ARG_DICT_NO_PREFIX)
-    async def again(self, ctx: discord.ApplicationContext, **override_values: dict) -> None:
+    @async_add_arguments(DISCORD_ARG_DICT_IMG2IMG)
+    async def img2img(self, ctx: discord.ApplicationContext,
+                      prompt: discord.Option(str, required=True, description=PROMPT_DESC),
+                      negative_prompt: discord.Option(str, default="", description=NEG_PROMPT_DESC),
+                      skip_prefixes: discord.Option(bool, default=False, description="Do not add prefixes to prompt and negative prompt. Overrides skip_prefix and skip_neg_prefix"),
+                      skip_prefix: discord.Option(bool, default=False, description="Do not add prefix to prompt"),
+                      skip_neg_prefix: discord.Option(bool, default=False, description="Do not add negative prefix to prompt"),
+                      image: discord.Option(discord.Attachment, description="Image for img2img, overrides image_url (will use denoising strength)", required=False),
+                      image_url: discord.Option(str, description="Image url for img2img (will use denoising strength)", required=False),
+                      **values: dict) -> None:
         """
-        A slash command that generates images using Stable Diffusion with previously used values. See 
-        DISCORD_ARG_DICT_NO_PREFIX for what options can be passed in **override_values, and a description 
-        of what those options do.
+        A slash command that generates images using Stable Diffusion. See DISCORD_ARG_DICT for what options can be 
+        passed in **values, and a description of what those options do.
 
         Args:
             ctx (discord.ApplicationContext): The context of the command.
-            **override_values (dict): The values to override in the previous request.
+            prompt (discord.Option[str]): The prompt to use for image generation.
+            negative_prompt (discord.Option[str]): The negative prompt to use for image generation.
+            skip_prefixes (discord.Option[bool]): Flag to indicate if prompt and negative prompt prefixes should be skipped.
+            **values (discord.Option[dict]): The arguments for the image generation.
         """
+
         if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
             return await ctx.respond("Unsupported text channel")
 
-        key = (ctx.channel_id, ctx.author.id)
-        if key not in self.prev_request:
-            await ctx.respond("no known previous request for user in this channel")
-            return
+        # ensure no values remain as None
+        for name, value in values.items():
+            # attempt to pull default value from user preferences
+            if value is None:
+                value = self.bot.sd_user_preferences.get_preference(
+                    ctx.author.id, name)
 
-        prompt, negative_prompt, values = self.prev_request[key]
+            # otherwise fall back to global default
+            if value is None:
+                value = IMG2IMG_CONFIG[name]["default"]
 
-        for name, value in override_values.items():
-            if value is not None:
-                values[name] = value
+            values[name] = value
 
-        await self._process_request(ctx, prompt, negative_prompt, **values)
+        if skip_prefix or skip_prefixes:
+            values[PREFIX] = None
+
+        if skip_neg_prefix or skip_prefixes:
+            values[NEG_PREFIX] = None
+
+        if image is not None:
+            image_url = image.url
+
+        if image_url is None:
+            return await ctx.respond("img2img requires an image input")
+
+        await self._process_request(ctx, prompt, negative_prompt, image_url, **values)
 
     @discord.slash_command(description="get information about stable diffusion supported options")
     @commands.cooldown(1, 1, commands.BucketType.user)
@@ -268,11 +332,11 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         response = ""
         if models:
             response += "Supported models:\n"
-            for model in PARAM_CONFIG[MODEL]["supported_values"]:
+            for model in BASE_PARAMS[MODEL]["supported_values"]:
                 response += f"\t{model}\n"
         if vaes:
             response += "Supported vaes:\n"
-            for vae in PARAM_CONFIG[VAE]["supported_values"]:
+            for vae in BASE_PARAMS[VAE]["supported_values"]:
                 response += f"\t{vae}\n"
         if loras:
             response += "Supported loras:\n"

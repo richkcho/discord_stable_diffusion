@@ -96,7 +96,7 @@ class StableDiffusionWebClient(threading.Thread):
             return None
 
         # try to match friendly model name
-        for model in PARAM_CONFIG[MODEL]["supported_values"]:
+        for model in BASE_PARAMS[MODEL]["supported_values"]:
             if "sd_model_checkpoint" not in self._options:
                 self.get_options(True)
                 return None
@@ -136,7 +136,7 @@ class StableDiffusionWebClient(threading.Thread):
         """
         if self._options is None or refresh:
             try:
-                self._options = requests.get(self._url("sdapi/v1/options")).json()
+                self._options = requests.get(self._url("sdapi/v1/options"), timeout=60).json()
             except requests.exceptions.ConnectionError:
                 return None
 
@@ -152,7 +152,7 @@ class StableDiffusionWebClient(threading.Thread):
         Returns:
             bool: True if the options were set successfully, False otherwise.
         """
-        response = requests.post(url=self._url("sdapi/v1/options"), json=values)
+        response = requests.post(url=self._url("sdapi/v1/options"), timeout=60, json=values)
         if response.status_code == 200:
             for key, value in values.items():
                 self._options[key] = value
@@ -194,7 +194,38 @@ class StableDiffusionWebClient(threading.Thread):
         }
         payload["override_settings_restore_afterwards"] = True
 
-        return requests.post(url=self._url("sdapi/v1/txt2img"), json=payload).json()
+        return requests.post(url=self._url("sdapi/v1/txt2img"), timeout=300, json=payload).json()
+
+    def _img2img(self, work_item: WorkItem) -> dict:
+        """
+        Sends a img2img prompt to the Stable Diffusion API and returns the generated images.
+
+        Args:
+            work_item (WorkItem): The work item containing the init image, prompt, and other configuration options.
+
+        Returns:
+            dict: A dictionary containing the generated images.
+        """
+
+        payload = {
+            "prompt": work_item.prompt,
+            "negative_prompt": work_item.neg_prompt,
+            "steps": work_item.steps,
+            "image_cfg_scale": work_item.cfg,
+            "sampler_index": work_item.sampler,
+            "seed": work_item.seed,
+            "width": work_item.width,
+            "height": work_item.height,
+            "batch_size": work_item.batch_size,
+            "resize_mode": work_item.resize_mode,
+            "denoising_strength": work_item.denoising_str,
+            "init_images": [
+                "data:image/png;base64," + work_item.image_b64
+            ]
+        }
+
+        return requests.post(url=self._url("sdapi/v1/img2img"), timeout=300, json=payload).json()
+
 
     def _process_work_item(self, work_item: WorkItem) -> None:
         """
@@ -211,12 +242,16 @@ class StableDiffusionWebClient(threading.Thread):
                     work_item.error_message = "Unable to switch to model %s" % work_item.model
                     return
 
-            data = self._txt2img(work_item)
+            if work_item.image_b64 is None:
+                data = self._txt2img(work_item)
+            else:
+                data = self._img2img(work_item)
 
             images = [Image.open(io.BytesIO(base64.b64decode(i.split(",",1)[0]))) for i in data["images"]]
 
             work_item.images = images
-        except:
+        except Exception as e:
+            print(e)
             print("Failed to process work item")
 
     def detach_from_queue(self):

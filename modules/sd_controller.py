@@ -17,7 +17,7 @@ from typing import Dict, List, Tuple
 import torch
 from aioprocessing import AioQueue
 
-from modules.consts import (BASE_PORT, MODEL, PARAM_CONFIG, QUEUE_MAX_SIZE,
+from modules.consts import (BASE_PARAMS, BASE_PORT, MODEL, QUEUE_MAX_SIZE,
                             SOFT_DEADLINE)
 from modules.locked_list import LockedList
 from modules.sd_web_client import StableDiffusionWebClient
@@ -75,7 +75,7 @@ class StableDiffusionController(threading.Thread):
         """
         Initialize per-model queues for processing work items 
         """
-        models = PARAM_CONFIG[MODEL]["supported_values"]
+        models = BASE_PARAMS[MODEL]["supported_values"]
         for model in models:
             self.queues[model] = (LockedList[WorkItem](), [])
 
@@ -189,7 +189,7 @@ class StableDiffusionController(threading.Thread):
         """
         Runs the controller.
         """
-        models = PARAM_CONFIG[MODEL]["supported_values"]
+        models = BASE_PARAMS[MODEL]["supported_values"]
 
         for gpu_id in range(self._device_count()):
             self._start_worker(gpu_id)

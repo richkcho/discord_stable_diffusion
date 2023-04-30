@@ -5,8 +5,16 @@ Functions:
 - async_add_arguments: Decorator to "modify" the signature of a function according to the input dictionary
 - max_batch_size: Computes the maximum image batch size that can be handled by the supported GPUs
 """
+import asyncio
+import base64
 import inspect
+import io
 from functools import wraps
+from typing import Optional
+
+import aiohttp
+import PIL
+from PIL import Image
 
 
 def async_add_arguments(arguments: dict):
@@ -14,12 +22,12 @@ def async_add_arguments(arguments: dict):
     A decorator function to modify the signature of a function based on the input dictionary.
 
     Args:
-    arguments (dict): A dictionary of arguments to be added to the function signature. Each key in the dictionary is 
-    an argument name, and the corresponding value is another dictionary with the following keys:
-        - type (type): The type of the argument.
+        arguments (dict): A dictionary of arguments to be added to the function signature. Each key in the dictionary is 
+        an argument name, and the corresponding value is another dictionary with the following keys:
+            - type (type): The type of the argument.
 
     Returns:
-    A function that has its signature modified according to the input dictionary.
+        A function that has its signature modified according to the input dictionary.
     """
     def decorator(func):
         sig = inspect.signature(func)
@@ -66,13 +74,13 @@ def max_batch_size(width: int, height: int, scale: float, upscaler: str) -> int:
     Computes the maximum image batch size that can be handled by the supported GPUs.
 
     Args:
-    width (int): The width of the input image.
-    height (int): The height of the input image.
-    scale (float): The upscale factor of the image
-    upscaler (str): The upscaler to be used, if the image is upscaled.
+        width (int): The width of the input image.
+        height (int): The height of the input image.
+        scale (float): The upscale factor of the image
+        upscaler (str): The upscaler to be used, if the image is upscaled.
 
     Returns:
-    The maximum batch size of images that can be processed.
+        The maximum batch size of images that can be processed.
     """
     if scale > 1:
         if upscaler == 'Latent':
@@ -93,3 +101,38 @@ def max_batch_size(width: int, height: int, scale: float, upscaler: str) -> int:
                 return 1
             return 2
     return 4
+
+
+async def download_image(url: str, timeout=10) -> Optional[Image.Image]:
+    """
+    Downloads an image at a given url, and returns an Image object
+
+    Args:
+        url: the url to download the image from
+        timeout: how long to let the request go, in seconds
+    """
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(url, timeout=timeout) as response:
+                if not response.ok:
+                    return None
+                try:
+                    image_data = await response.read()
+                    return Image.open(io.BytesIO(image_data))
+                except PIL.UnidentifiedImageError:
+                    return None
+        except asyncio.TimeoutError:
+            return None
+
+
+def b64encode_image(image: Image.Image, fmt: str = "PNG") -> str:
+    """
+    Converts an image to a base64 encoded image with the specified format.
+
+    Args:
+        image: the image to encode
+        format: the underlying image format
+    """
+    buf = io.BytesIO()
+    image.save(buf, format=fmt)
+    return base64.b64encode(buf.getvalue()).decode()

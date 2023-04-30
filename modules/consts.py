@@ -32,8 +32,12 @@ HEIGHT = "height"
 BATCH_SIZE = "batch_size"
 VAE = "vae"
 MODEL = "model"
+DENOISING_STR_IMG2IMG = "denoising_strength_img2img"
+RESIZE_MODE = "resize_mode"
+AUTOSIZE = "autosize"
+AUTOSIZE_MAXSIZE = "autosize_maxsize"
 
-PARAM_CONFIG = {
+PREFIX_PARAMS = {
     PREFIX: {
         "type": str,
         "default": "",
@@ -43,7 +47,10 @@ PARAM_CONFIG = {
         "type": str,
         "default": "",
         "description": "prefix for stable diffusion negative prompts"
-    },
+    }
+}
+
+BASE_PARAMS = {
     STEPS: {
         "type": int,
         "default": 28,
@@ -73,33 +80,6 @@ PARAM_CONFIG = {
         "description": "Seed to use for generation. Use -1 to get a random seed",
         "min": -1,
         "max": 4294967294
-    },
-    SCALE: {
-        "type": float,
-        "default": 1,
-        "description": "ratio to upscale the image by. Leave at 1 for no upscaling",
-        "min": 1,
-        "max": 2
-    },
-    DENOISING_STR: {
-        "type": float,
-        "default": 0.7,
-        "description": "denoising strength to use for upscaler, if scale > 1",
-        "min": 0,
-        "max": 1
-    },
-    HIGHRES_STEPS: {
-        "type": int,
-        "default": 10,
-        "description": "how many steps to use for upscaler, if scale > 1",
-        "min": 1,
-        "max": 20
-    },
-    UPSCALER: {
-        "type": str,
-        "default": "Latent",
-        "description": "which upscaler to use, if scale > 1",
-        "supported_values": ['Latent', 'R-ESRGAN 4x+', 'R-ESRGAN 4x+ Anime6B']
     },
     WIDTH: {
         "type": int,
@@ -136,11 +116,81 @@ PARAM_CONFIG = {
     }
 }
 
+UPSCALE_PARAMS = {
+    SCALE: {
+        "type": float,
+        "default": 1,
+        "description": "ratio to upscale the image by. Leave at 1 for no upscaling",
+        "min": 1,
+        "max": 2
+    },
+    DENOISING_STR: {
+        "type": float,
+        "default": 0.7,
+        "description": "denoising strength to use for upscaler, if scale > 1",
+        "min": 0,
+        "max": 1
+    },
+    HIGHRES_STEPS: {
+        "type": int,
+        "default": 10,
+        "description": "how many steps to use for upscaler, if scale > 1",
+        "min": 1,
+        "max": 20
+    },
+    UPSCALER: {
+        "type": str,
+        "default": "Latent",
+        "description": "which upscaler to use, if scale > 1",
+        "supported_values": ['Latent', 'R-ESRGAN 4x+', 'R-ESRGAN 4x+ Anime6B']
+    }
+}
+
+IMG2IMG_PARAMS = {
+    AUTOSIZE: {
+        "type": bool,
+        "default": True,
+        "description": "Automatically set width and height, keeping original aspect ratio."
+    },
+    AUTOSIZE_MAXSIZE: {
+        "type": int,
+        "default": 512,
+        "min": 256,
+        "max": 1024,
+        "description": "Maximum size for width/height if autosize is set."
+    },
+    DENOISING_STR_IMG2IMG: {
+        "type": float,
+        "default": 0.55,
+        "description": "denoising strength to use for img2img. Higher values increase deviation from input.",
+        "min": 0,
+        "max": 1
+    },
+    RESIZE_MODE: {
+        "type": str,
+        "default": "Crop and resize",
+        "description": "how to resize images for img2img",
+        "supported_values": ["Just resize", "Crop and resize", "Resize and fill", "Just resize (latent upscale)"]
+    }
+}
+
+
+def resize_mode_str_to_int(resize_mode: str) -> int:
+    """
+    Converts the string value of resize mode to int value
+
+    Args:
+        Resize mode string. Assumed to be a valid resize mode. 
+    Returns:
+        Resize mode int value. 
+    """
+    return IMG2IMG_PARAMS[RESIZE_MODE]["supported_values"].index(resize_mode)
+
 
 def update_config():
     """
     Updates the configuration parameters for the stable diffusion model based on the available files in the 
-    model directory. It adds the supported vae and model names to the corresponding lists in PARAM_CONFIG.
+    model directory. It adds the supported vae and model names to the corresponding lists in BASE_PARAMS.
 
     Args:
         None
@@ -149,8 +199,8 @@ def update_config():
         None
     """
     model_dir = "./stable-diffusion-webui/models/Stable-diffusion/"
-    supported_vaes = PARAM_CONFIG[VAE]["supported_values"]
-    supported_models = PARAM_CONFIG[MODEL]["supported_values"]
+    supported_vaes = BASE_PARAMS[VAE]["supported_values"]
+    supported_models = BASE_PARAMS[MODEL]["supported_values"]
     for file in os.listdir(model_dir):
         if not os.path.isfile(os.path.join(model_dir, file)):
             continue
@@ -230,3 +280,12 @@ def update_embeddings():
 update_config()
 update_loras()
 update_embeddings()
+
+# configurable parameters for txt2img
+TXT2IMG_CONFIG = PREFIX_PARAMS | BASE_PARAMS | UPSCALE_PARAMS
+
+# configurable parameters for img2img
+IMG2IMG_CONFIG = PREFIX_PARAMS | BASE_PARAMS | IMG2IMG_PARAMS
+
+# all possible configurable parameters
+ALL_CONFIG = PREFIX_PARAMS | BASE_PARAMS | UPSCALE_PARAMS | IMG2IMG_PARAMS

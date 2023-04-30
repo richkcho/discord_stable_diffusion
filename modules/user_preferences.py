@@ -23,6 +23,7 @@ preferences = load_preferences("preferences.json")
 """
 import json
 import threading
+from typing import Optional
 
 
 class UserPreferences:
@@ -43,7 +44,15 @@ class UserPreferences:
             Returns the preferences as a dictionary.        
     """
 
-    def __init__(self, preferences={}):
+    def __init__(self, preferences: Optional[dict] = None):
+        """
+        Initializes a UserPreferences object.
+
+        Args:
+            preferences (Optional[dict]): the dictionary to use for user preferences
+        """
+        if preferences is None:
+            preferences = {}
         self._preferences = preferences
         self._lock = threading.Lock()
 
