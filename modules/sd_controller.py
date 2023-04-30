@@ -63,7 +63,7 @@ class StableDiffusionController(threading.Thread):
         - device_id (int): the ID of the GPU to use.
         """
         port = BASE_PORT + device_id
-        cmd = ["python", "launch.py", "--device-id", str(device_id), "--port", str(port), "--api", "--xformers"]
+        cmd = ["python", "launch.py", "--device-id", str(device_id), "--port", str(port), "--api", "--xformers", "--medvram"]
 
         api_proc = Popen(cmd, cwd="./stable-diffusion-webui")
         worker = StableDiffusionWebClient(self.result_queue, port, api_proc)
