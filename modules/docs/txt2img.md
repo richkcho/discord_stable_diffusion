@@ -1,0 +1,4 @@
+Run stable diffusion text to image. Requires a prompt: a description of what you want in your image. Your prompt will be pre-fixed with a prompt prefix if you set one. (Same for the negative prompt). The negative prompt contains what you don't want to see in your image. There are a number of other parameters, a brief description is provided for each parameter.
+
+* Use scale > 1 to activate highres.fix 
+* A response of "unknown error" usually means OOM. If it repeats for a given set of parameters, reduce image size, adjust upscaler, or batch size. Note that latent upscaling is the most memory efficient.

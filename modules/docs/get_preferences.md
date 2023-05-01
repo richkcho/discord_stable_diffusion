@@ -1,0 +1,1 @@
+Get user preferences. This will return a list of all currently set preferences.

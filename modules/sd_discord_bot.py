@@ -2,12 +2,12 @@
 A Discord bot built on the py-cord API for handling stable diffusion requests.
 """
 
-from aioprocessing import AioQueue
 import discord
+from aioprocessing import AioQueue
 from discord.ext import commands
 
-from modules.user_preferences import UserPreferences
 from modules.discord_config import DiscordConfig
+from modules.user_preferences import UserPreferences
 
 
 class StableDiffusionDiscordBot(discord.Bot):
@@ -59,6 +59,7 @@ class StableDiffusionDiscordBot(discord.Bot):
         """
         self.load_extension("modules.cogs.user_config_commands")
         self.load_extension("modules.cogs.sd_generation_commands")
+        self.load_extension("modules.cogs.info_commands")
 
     async def on_application_command_error(self, context: discord.ApplicationContext, exception: discord.DiscordException):
         """

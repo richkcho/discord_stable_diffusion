@@ -166,7 +166,14 @@ IMG2IMG_PARAMS = {
         "default": "Crop and resize",
         "description": "how to resize images for img2img",
         "supported_values": ["Just resize", "Crop and resize", "Resize and fill", "Just resize (latent upscale)"]
-    }
+    },
+    SCALE: {
+        "type": float,
+        "default": 1,
+        "description": "ratio to upscale the image by. Leave at 1 for no upscaling",
+        "min": 1,
+        "max": 2
+    },
 }
 
 
@@ -214,6 +221,10 @@ DEFAULT_IN_FLIGHT_GEN_CAP = 1
 QUEUE_MAX_SIZE = 10
 BASE_PORT = 6900
 SOFT_DEADLINE = 30
+# maximum total pixels that fit when latent upscaling
+MAX_PIXEL_COUNT_LATENT = 1536 * 1536
+# max total pixels that fit when upscaling with R-ESRGAN
+MAX_PIXEL_COUNT_ESRGAN = 1024 * 2000
 
 LORAS = []
 EMBEDDINGS = []
@@ -287,3 +298,28 @@ AGAIN_CONFIG = BASE_PARAMS | UPSCALE_PARAMS | IMG2IMG_PARAMS
 
 # all possible configurable parameters
 ALL_CONFIG = PREFIX_PARAMS | BASE_PARAMS | UPSCALE_PARAMS | IMG2IMG_PARAMS
+
+COMMAND_DOCUMENTATION = {}
+
+
+def get_command_documentation():
+    """
+    Updates the COMMAND_DOCUMENTATION dictionary from files in the docs directory
+    """
+
+    docs_dir = "./modules/docs/"
+    for file in os.listdir(docs_dir):
+        if not os.path.isfile(os.path.join(docs_dir, file)):
+            continue
+
+        if not file.endswith(".md"):
+            continue
+
+        name = os.path.splitext(file)[0]
+        with open(os.path.join(docs_dir, file), "r", encoding="utf-8") as f:
+            doc_str = f.read()
+
+        COMMAND_DOCUMENTATION[name] = doc_str
+
+
+get_command_documentation()

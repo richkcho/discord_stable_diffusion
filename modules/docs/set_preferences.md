@@ -1,0 +1,1 @@
+Set user preferences. This sets a stable diffusion parameter to default to the user chosen value, instead of the global default. Try the command in order to open a list of possible values to set as well as a description for said values.

@@ -1,0 +1,1 @@
+Gets information about installed models, vaes, embeddings, and loras. This will list what is supported and in the case of embeddings and loras, provide the trigger word or string (if present). 

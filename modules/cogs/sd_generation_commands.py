@@ -21,14 +21,13 @@ import discord
 from discord.ext import commands
 
 from modules.cogs.discord_arg_consts import (DISCORD_ARG_DICT_AGAIN,
-                                             DISCORD_ARG_DICT_ALL,
                                              DISCORD_ARG_DICT_IMG2IMG,
                                              DISCORD_ARG_DICT_TXT2IMG)
 from modules.consts import *
 from modules.sd_discord_bot import StableDiffusionDiscordBot
 from modules.utils import (async_add_arguments, b64encode_image,
                            download_image, make_message_str, max_batch_size,
-                           parse_message_str)
+                           parse_message_str, validate_params)
 from modules.work_item import WorkItem
 
 
@@ -145,21 +144,8 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if self.bot.sd_work_queue.qsize() > QUEUE_MAX_SIZE:
             return await ctx.respond("Work queue is at maximum size, please wait before making your next request")
 
-        # img2img: validate image, update image size to image if autosize is set
-        image_b64 = None
-        if image_url:
-            image = await download_image(image_url)
-            if image is None:
-                return await ctx.respond("Unable to retrieve image (bad file type or image no longer exists)")
-            image_b64 = b64encode_image(image)
-
-            # if autosize, set width and height accordingly (only applies in img2img)
-            if values[AUTOSIZE]:
-                autosize_max = values[AUTOSIZE_MAXSIZE]
-                max_dim = max(image.size)
-                ratio = autosize_max / max_dim
-                values[WIDTH], values[HEIGHT] = [
-                    int(ratio * dim) for dim in image.size]
+        # make sure args seem sane, if present
+        validate_params(values)
 
         # set these to default "no-op" values if not set
         # consider a cleaner way to do this
@@ -173,6 +159,29 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
             values[PREFIX] = None
         if NEG_PREFIX not in values:
             values[NEG_PREFIX] = None
+
+        # img2img: validate image, update image size to image if autosize is set
+        image_b64 = None
+        if image_url:
+            image = await download_image(image_url)
+            if image is None:
+                return await ctx.respond("Unable to retrieve image (bad file type or image no longer exists)")
+            image_b64 = b64encode_image(image)
+
+            # if user set scale, that overrides autosize
+            if values[SCALE] > 1:
+                # scale behaves "differently" in img2img compared to txt2img, we just apply scale to image dimension
+                # values directly
+                values[WIDTH] = int(values[WIDTH] * values[SCALE])
+                values[HEIGHT] = int(values[HEIGHT] * values[SCALE])
+                values[SCALE] = 1
+            elif values[AUTOSIZE]:
+                # automatically set width and height to within maxsize, keeping aspect ratio
+                autosize_max = values[AUTOSIZE_MAXSIZE]
+                max_dim = max(image.size)
+                ratio = autosize_max / max_dim
+                values[WIDTH], values[HEIGHT] = [
+                    int(ratio * dim) for dim in image.size]
 
         # set default batch size according to image size
         if batch_size is None:
@@ -326,56 +335,11 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
 
         await self._process_request(ctx, prompt, negative_prompt, batch_size, image_url, **values)
 
-    @discord.slash_command(description="get information about stable diffusion supported options")
-    @commands.cooldown(1, 1, commands.BucketType.user)
-    async def info(self, ctx: discord.ApplicationContext,
-                   models: discord.Option(bool, default=False, description="Get list of supported stable diffusion models"),
-                   vaes: discord.Option(bool, default=False, description="Get supported vaes"),
-                   loras: discord.Option(bool, default=False, description="Get supported loras"),
-                   embeddings: discord.Option(bool, default=False, description="Get supported embeddings")):
-        """
-        Retrieves information about supported options for stable diffusion image generation.
-
-        Args:
-            ctx (discord.ApplicationContext): The context of the command.
-            models (bool): Whether to get a list of supported stable diffusion models.
-            vaes (bool): Whether to get a list of supported VAEs.
-            loras (bool): Whether to get a list of supported LORAs.
-            embeddings (bool): Whether to get a list of supported embeddings.
-        """
-        if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
-            return await ctx.respond("Unsupported text channel")
-
-        response = ""
-        if models:
-            response += "Supported models:\n"
-            for model in BASE_PARAMS[MODEL]["supported_values"]:
-                response += f"\t{model}\n"
-        if vaes:
-            response += "Supported vaes:\n"
-            for vae in BASE_PARAMS[VAE]["supported_values"]:
-                response += f"\t{vae}\n"
-        if loras:
-            response += "Supported loras:\n"
-            for lora in LORAS:
-                keywords = ", ".join(lora[1])
-                response += f"\t<lora:{lora[0]}> : keyword list [{keywords}]\n"
-        if embeddings:
-            response += "Supported embeddings:\n"
-            for embedding in EMBEDDINGS:
-                keywords = ", ".join(embedding[1])
-                response += f"\t{embedding[0]} : keyword list [{keywords}]\n"
-
-        if response == "":
-            response = "No information requested"
-
-        await ctx.respond(response)
-
-    @discord.slash_command(description="Redo a txt2img or img2img, overriding previous values with given values")
+    @discord.slash_command(description="Redo a txt2img or img2img, overriding previous values with given values.")
     @commands.cooldown(1, 1, commands.BucketType.user)
     @async_add_arguments(DISCORD_ARG_DICT_AGAIN)
     async def again(self, ctx: discord.ApplicationContext,
-                    message_id: discord.Option(str, required=True, description="Message ID of previous content to AGAIN with"),
+                    message_id_or_content: discord.Option(str, required=True, description="Message ID (or content) of previous content to AGAIN with"),
                     prompt: discord.Option(str, required=False, description=PROMPT_DESC),
                     negative_prompt: discord.Option(str, required=False, description=NEG_PROMPT_DESC),
                     batch_size: discord.Option(int, required=False, description=BATCH_SIZE_DESC),
@@ -386,13 +350,21 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
             return await ctx.respond("Unsupported text channel")
 
         try:
-            message = await ctx.channel.fetch_message(int(message_id))
-            if message.reference is not None:
-                message = await ctx.channel.fetch_message(message.reference.message_id)
+            message_id = int(message_id_or_content)
+            try:
+                message = await ctx.channel.fetch_message(int(message_id))
+                if message.reference is not None:
+                    message = await ctx.channel.fetch_message(message.reference.message_id)
+            except discord.errors.NotFound:
+                return await ctx.respond("Could not find source message")
+        except ValueError:
+            message = message_id_or_content
+
+        try:
             # parse message to get old values
             values = parse_message_str(message.content)
-        except (discord.errors.NotFound, ValueError, KeyError):
-            return await ctx.respond("Could not find source message")
+        except (ValueError, KeyError, IndexError):
+            return await ctx.respond("Could not parse message")
 
         # override args if present
         if prompt is not None:
@@ -414,7 +386,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
             if value is not None:
                 values[name] = value
                 continue
-            
+
             # otherwise use old value if set
             if name in values and values[name] is not None:
                 continue
@@ -427,7 +399,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
             # otherwise fall back to global default
             if value is None:
                 value = AGAIN_CONFIG[name]["default"]
-            
+
             values[name] = value
 
         await self._process_request(ctx, **values)

@@ -72,7 +72,7 @@ def async_add_arguments(arguments: dict):
     return decorator
 
 
-def max_batch_size(width: int, height: int, scale: float, upscaler: str) -> int:
+def max_batch_size(width: int, height: int, scale: float, upscaler: Optional[str]) -> int:
     """
     Computes the maximum image batch size that can be handled by the supported GPUs.
 
@@ -85,25 +85,10 @@ def max_batch_size(width: int, height: int, scale: float, upscaler: str) -> int:
     Returns:
         The maximum batch size of images that can be processed.
     """
-    if scale > 1:
-        if upscaler == 'Latent':
-            if width * height > 512 * 1024:
-                if scale > 1.5:
-                    return 0
-                return 1
+    max_pixel_count = MAX_PIXEL_COUNT_LATENT if upscaler is None or upscaler == "Latent" else MAX_PIXEL_COUNT_ESRGAN
+    pixel_count = width * height * scale * scale
 
-            if width * height > 512 * 512:
-                return 2
-            return 4
-
-        # R-ESRGAN upscalers use more memory
-        if scale > 1:
-            if width * height > 512 * 1024:
-                return 0
-            if width * height > 512 * 512:
-                return 1
-            return 2
-    return 4
+    return min(int(max_pixel_count / pixel_count), 4)
 
 
 async def download_image(url: str, timeout=10) -> Optional[Image.Image]:
@@ -244,6 +229,14 @@ def parse_message_str(message_str: str) -> dict:
 
 
 def validate_params(values: dict) -> dict:
+    """
+    Looks through a param dict and enforces that all parameters are within a valid range
+
+    Args:
+        values (dict): dictionary of name, value parameters
+    Returns:
+        the provided dictionary
+    """
     for name, data in ALL_CONFIG.items():
         if name in values:
             if data["type"] == str and "supported_values" in data:

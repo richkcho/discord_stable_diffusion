@@ -12,6 +12,12 @@ if TEST_VAE not in BASE_PARAMS[VAE]["supported_values"]:
 
 
 def check_params(values: dict):
+    """
+    Helper function to validate that a param dict contains all valid values
+
+    Args:
+        values (dict): parameter dict of name, value entries 
+    """
     for name, data in ALL_CONFIG.items():
         if name in values:
             if data["type"] == str and "supported_values" in data:
@@ -24,6 +30,9 @@ def check_params(values: dict):
 
 
 def test_validate_params():
+    """
+    Check that validate params makes all values in a dictionary valid
+    """
     bad_string = "dkjhasdluhlgkjhduskl???????"
 
     bad_config_min = {}
@@ -45,6 +54,9 @@ def test_validate_params():
 
 
 def test_message_parsing():
+    """
+    Test that make_message_str is invertible via parse_message_str
+    """
     # basic style test
     initial_values = {
         BATCH_SIZE: 4,
@@ -87,3 +99,23 @@ def test_message_parsing():
     parsed_dict = parse_message_str(
         make_message_str(**img2img_values))
     assert parsed_dict == img2img_values
+
+
+def test_max_batch_size():
+    """
+    Test that max batch size correctly limits memory usage
+    """
+    # tested values on 8 GB VRAM, with xformers and medvram
+    # data format is (width, height, scale, upscaler), (batch size, passed)
+    test_data_8gb = [
+        ((512, 512, 2, "Latent"), (2, True)),
+        ((512, 512, 2, "R-ESRGAN 4x+"), (1, True)),
+        ((1024, 1024, 2, "Latent"), (1, False)),
+        ((512, 512, 2, "R-ESRGAN 4x+"), (2, False)),
+    ]
+
+    for args, (batch_size, passed) in test_data_8gb:
+        if passed:
+            assert batch_size <= max_batch_size(*args)
+        else:
+            assert max_batch_size(*args) < batch_size
