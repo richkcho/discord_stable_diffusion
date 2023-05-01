@@ -115,7 +115,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if self.active_channels[channel.id] == 1:
             asyncio.get_event_loop().create_task(typer(self.active_channels, channel))
 
-    async def _process_request(self, ctx: discord.ApplicationContext, prompt: str, negative_prompt: str, image_url: Optional[str] = None, **values: dict):
+    async def _process_request(self, ctx: discord.ApplicationContext, prompt: str, negative_prompt: str, batch_size: Optional[int], image_url: Optional[str] = None, **values: dict):
         """
         Processes a request to generate images using Stable Diffusion.
 
@@ -163,10 +163,17 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
             values[SCALE] = 1
             values[UPSCALER] = "Latent"
 
+        # set default batch size according to image size
+        if batch_size is None:
+            if values[HEIGHT] * values[WIDTH] > 512 * 512:
+                batch_size = 2
+            else:
+                batch_size = 4
+
         # validate batch size
-        values[BATCH_SIZE] = min(values[BATCH_SIZE], max_batch_size(
+        batch_size = min(batch_size, max_batch_size(
             values[WIDTH], values[HEIGHT], values[SCALE], values[UPSCALER]))
-        if values[BATCH_SIZE] == 0:
+        if batch_size == 0:
             return await ctx.respond("Parameters described will use too much VRAM, please reduce load and try again.")
 
         if values[SEED] == -1:
@@ -179,12 +186,12 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if values[NEG_PREFIX] is not None:
             negative_prompt = values[NEG_PREFIX] + ", " + negative_prompt
 
-        ack_message = f"Generating {values[BATCH_SIZE]} images for prompt: {prompt}\n"
+        ack_message = f"Generating {batch_size} images for prompt: {prompt}\n"
         ack_message += f"negative prompt: {negative_prompt}\n"
         ack_message += f"Using model: {values[MODEL]}, vae: {values[VAE]}, image size: {values[WIDTH]}x{values[HEIGHT]}\n"
         ack_message += f"Using steps: {values[STEPS]}, cfg: {values[CFG]:.2f}, sampler: {values[SAMPLER]}, seed {values[SEED]}\n"
         work_item = WorkItem(values[MODEL], values[VAE], prompt, negative_prompt, values[WIDTH], values[HEIGHT],
-                             values[STEPS], values[CFG], values[SAMPLER], values[SEED], values[BATCH_SIZE], command_handle)
+                             values[STEPS], values[CFG], values[SAMPLER], values[SEED], batch_size, command_handle)
 
         # upscaling and img2img are mutually exclusive (for now?).
         if image_b64 is not None:
@@ -215,6 +222,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
     async def txt2img(self, ctx: discord.ApplicationContext,
                       prompt: discord.Option(str, required=True, description=PROMPT_DESC),
                       negative_prompt: discord.Option(str, default="", description=NEG_PROMPT_DESC),
+                      batch_size: discord.Option(int, required=False, description="how many images to generate at once (may be lowered due to vram constraints)"),
                       skip_prefixes: discord.Option(bool, default=False, description="Do not add prefixes to prompt and negative prompt. Overrides skip_prefix and skip_neg_prefix"),
                       skip_prefix: discord.Option(bool, default=False, description="Do not add prefix to prompt"),
                       skip_neg_prefix: discord.Option(bool, default=False, description="Do not add negative prefix to prompt"),
@@ -253,7 +261,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if skip_neg_prefix or skip_prefixes:
             values[NEG_PREFIX] = None
 
-        await self._process_request(ctx, prompt, negative_prompt, **values)
+        await self._process_request(ctx, prompt, negative_prompt, batch_size, **values)
 
     @discord.slash_command(description="generate images using image as base with stable diffusion")
     @commands.cooldown(1, 1, commands.BucketType.user)
@@ -261,6 +269,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
     async def img2img(self, ctx: discord.ApplicationContext,
                       prompt: discord.Option(str, required=True, description=PROMPT_DESC),
                       negative_prompt: discord.Option(str, default="", description=NEG_PROMPT_DESC),
+                      batch_size: discord.Option(int, required=False, description="how many images to generate at once (may be lowered due to vram constraints)"),
                       skip_prefixes: discord.Option(bool, default=False, description="Do not add prefixes to prompt and negative prompt. Overrides skip_prefix and skip_neg_prefix"),
                       skip_prefix: discord.Option(bool, default=False, description="Do not add prefix to prompt"),
                       skip_neg_prefix: discord.Option(bool, default=False, description="Do not add negative prefix to prompt"),
@@ -307,7 +316,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if image_url is None:
             return await ctx.respond("img2img requires an image input")
 
-        await self._process_request(ctx, prompt, negative_prompt, image_url, **values)
+        await self._process_request(ctx, prompt, negative_prompt, batch_size, image_url, **values)
 
     @discord.slash_command(description="get information about stable diffusion supported options")
     @commands.cooldown(1, 1, commands.BucketType.user)

@@ -29,7 +29,6 @@ HIGHRES_STEPS = "highres_steps"
 UPSCALER = "upscaler"
 WIDTH = "width"
 HEIGHT = "height"
-BATCH_SIZE = "batch_size"
 VAE = "vae"
 MODEL = "model"
 DENOISING_STR_IMG2IMG = "denoising_strength_img2img"
@@ -94,13 +93,6 @@ BASE_PARAMS = {
         "description": "image height",
         "min": 256,
         "max": 1024
-    },
-    BATCH_SIZE: {
-        "type": int,
-        "default": 4,
-        "description": "how many images to generate at once (may be lowered due to vram constraints)",
-        "min": 1,
-        "max": 4
     },
     VAE: {
         "type": str,
