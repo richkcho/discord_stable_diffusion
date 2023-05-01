@@ -8,13 +8,16 @@ that. Just read the consts, they're named pretty directly and are self explanato
 
 import os
 
-# labels for commands
+# labels for args
 # these commands are unique to stable diffusion generation requests
 PROMPT = "prompt"
 PROMPT_DESC = "The prompt for stable diffusion. Used to describe what you want in the image output."
 
-NEG_PROMPT = "neg_prompt"
+NEG_PROMPT = "negative_prompt"
 NEG_PROMPT_DESC = "The negative prompt for stable diffusion. Used to describe what you don't want in the image output."
+
+BATCH_SIZE = "batch_size"
+BATCH_SIZE_DESC = "how many images to generate at once (may be lowered due to vram constraints)"
 
 # these commands can be set as user preferences
 PREFIX = "prefix"
@@ -278,6 +281,9 @@ TXT2IMG_CONFIG = PREFIX_PARAMS | BASE_PARAMS | UPSCALE_PARAMS
 
 # configurable parameters for img2img
 IMG2IMG_CONFIG = PREFIX_PARAMS | BASE_PARAMS | IMG2IMG_PARAMS
+
+# configurable parameters for again
+AGAIN_CONFIG = BASE_PARAMS | UPSCALE_PARAMS | IMG2IMG_PARAMS
 
 # all possible configurable parameters
 ALL_CONFIG = PREFIX_PARAMS | BASE_PARAMS | UPSCALE_PARAMS | IMG2IMG_PARAMS

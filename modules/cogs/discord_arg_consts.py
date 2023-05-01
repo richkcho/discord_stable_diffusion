@@ -2,7 +2,8 @@ from typing import List
 
 import discord
 
-from modules.consts import ALL_CONFIG, IMG2IMG_CONFIG, TXT2IMG_CONFIG
+from modules.consts import (AGAIN_CONFIG, ALL_CONFIG, IMG2IMG_CONFIG,
+                            TXT2IMG_CONFIG)
 
 
 def make_arg_dict(src_dict: dict) -> dict:
@@ -56,4 +57,5 @@ def make_arg_dict(src_dict: dict) -> dict:
 
 DISCORD_ARG_DICT_TXT2IMG = make_arg_dict(TXT2IMG_CONFIG)
 DISCORD_ARG_DICT_IMG2IMG = make_arg_dict(IMG2IMG_CONFIG)
+DISCORD_ARG_DICT_AGAIN = make_arg_dict(AGAIN_CONFIG)
 DISCORD_ARG_DICT_ALL = make_arg_dict(ALL_CONFIG)

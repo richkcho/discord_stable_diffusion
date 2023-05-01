@@ -20,12 +20,15 @@ from typing import Dict, Optional, Union
 import discord
 from discord.ext import commands
 
-from modules.cogs.discord_arg_consts import (DISCORD_ARG_DICT_IMG2IMG,
+from modules.cogs.discord_arg_consts import (DISCORD_ARG_DICT_AGAIN,
+                                             DISCORD_ARG_DICT_ALL,
+                                             DISCORD_ARG_DICT_IMG2IMG,
                                              DISCORD_ARG_DICT_TXT2IMG)
 from modules.consts import *
 from modules.sd_discord_bot import StableDiffusionDiscordBot
 from modules.utils import (async_add_arguments, b64encode_image,
-                           download_image, max_batch_size)
+                           download_image, make_message_str, max_batch_size,
+                           parse_message_str)
 from modules.work_item import WorkItem
 
 
@@ -159,13 +162,21 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
                     int(ratio * dim) for dim in image.size]
 
         # set these to default "no-op" values if not set
+        # consider a cleaner way to do this
         if SCALE not in values:
             values[SCALE] = 1
+        if UPSCALER not in values:
             values[UPSCALER] = "Latent"
+        if AUTOSIZE not in values:
+            values[AUTOSIZE] = False
+        if PREFIX not in values:
+            values[PREFIX] = None
+        if NEG_PREFIX not in values:
+            values[NEG_PREFIX] = None
 
         # set default batch size according to image size
         if batch_size is None:
-            if values[HEIGHT] * values[WIDTH] > 512 * 512:
+            if values[HEIGHT] * values[WIDTH] * values[SCALE] * values[SCALE] > 512 * 512:
                 batch_size = 2
             else:
                 batch_size = 4
@@ -186,20 +197,15 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if values[NEG_PREFIX] is not None:
             negative_prompt = values[NEG_PREFIX] + ", " + negative_prompt
 
-        ack_message = f"Generating {batch_size} images for prompt: {prompt}\n"
-        ack_message += f"negative prompt: {negative_prompt}\n"
-        ack_message += f"Using model: {values[MODEL]}, vae: {values[VAE]}, image size: {values[WIDTH]}x{values[HEIGHT]}\n"
-        ack_message += f"Using steps: {values[STEPS]}, cfg: {values[CFG]:.2f}, sampler: {values[SAMPLER]}, seed {values[SEED]}\n"
+        # construct work item, ack message, and ship it. Do not modify values after this line
         work_item = WorkItem(values[MODEL], values[VAE], prompt, negative_prompt, values[WIDTH], values[HEIGHT],
                              values[STEPS], values[CFG], values[SAMPLER], values[SEED], batch_size, command_handle)
 
         # upscaling and img2img are mutually exclusive (for now?).
         if image_b64 is not None:
-            ack_message += f"Using img as base, resize mode: {values[RESIZE_MODE]}. Denoising str {values[DENOISING_STR_IMG2IMG]:.2f}"
             work_item.set_image(
                 image_b64, values[DENOISING_STR_IMG2IMG], resize_mode_str_to_int(values[RESIZE_MODE]))
         elif values[SCALE] > 1:
-            ack_message += f"Using highres upscaler {values[UPSCALER]}, {values[HIGHRES_STEPS]} steps. Denoising str {values[DENOISING_STR]:.2f}\n"
             work_item.set_highres(
                 values[SCALE], values[UPSCALER], values[HIGHRES_STEPS], values[DENOISING_STR])
 
@@ -207,6 +213,8 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         self.in_flight_commands[command_handle] = ctx
         self.user_in_flight_gen_count[ctx.author.id] += 1
 
+        ack_message = make_message_str(
+            prompt, negative_prompt, batch_size, image_url, **values)
         if image_url is not None:
             embed = discord.Embed()
             embed.set_image(url=image_url)
@@ -222,7 +230,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
     async def txt2img(self, ctx: discord.ApplicationContext,
                       prompt: discord.Option(str, required=True, description=PROMPT_DESC),
                       negative_prompt: discord.Option(str, default="", description=NEG_PROMPT_DESC),
-                      batch_size: discord.Option(int, required=False, description="how many images to generate at once (may be lowered due to vram constraints)"),
+                      batch_size: discord.Option(int, required=False, description=BATCH_SIZE_DESC),
                       skip_prefixes: discord.Option(bool, default=False, description="Do not add prefixes to prompt and negative prompt. Overrides skip_prefix and skip_neg_prefix"),
                       skip_prefix: discord.Option(bool, default=False, description="Do not add prefix to prompt"),
                       skip_neg_prefix: discord.Option(bool, default=False, description="Do not add negative prefix to prompt"),
@@ -269,7 +277,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
     async def img2img(self, ctx: discord.ApplicationContext,
                       prompt: discord.Option(str, required=True, description=PROMPT_DESC),
                       negative_prompt: discord.Option(str, default="", description=NEG_PROMPT_DESC),
-                      batch_size: discord.Option(int, required=False, description="how many images to generate at once (may be lowered due to vram constraints)"),
+                      batch_size: discord.Option(int, required=False, description=BATCH_SIZE_DESC),
                       skip_prefixes: discord.Option(bool, default=False, description="Do not add prefixes to prompt and negative prompt. Overrides skip_prefix and skip_neg_prefix"),
                       skip_prefix: discord.Option(bool, default=False, description="Do not add prefix to prompt"),
                       skip_neg_prefix: discord.Option(bool, default=False, description="Do not add negative prefix to prompt"),
@@ -362,6 +370,67 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
             response = "No information requested"
 
         await ctx.respond(response)
+
+    @discord.slash_command(description="Redo a txt2img or img2img, overriding previous values with given values")
+    @commands.cooldown(1, 1, commands.BucketType.user)
+    @async_add_arguments(DISCORD_ARG_DICT_AGAIN)
+    async def again(self, ctx: discord.ApplicationContext,
+                    message_id: discord.Option(str, required=True, description="Message ID of previous content to AGAIN with"),
+                    prompt: discord.Option(str, required=False, description=PROMPT_DESC),
+                    negative_prompt: discord.Option(str, required=False, description=NEG_PROMPT_DESC),
+                    batch_size: discord.Option(int, required=False, description=BATCH_SIZE_DESC),
+                    image: discord.Option(discord.Attachment, description="Image for img2img, overrides image_url (will use denoising strength)", required=False),
+                    image_url: discord.Option(str, description="Image url for img2img (will use denoising strength)", required=False),
+                    **override_values: dict):
+        if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
+            return await ctx.respond("Unsupported text channel")
+
+        try:
+            message = await ctx.channel.fetch_message(int(message_id))
+            if message.reference is not None:
+                message = await ctx.channel.fetch_message(message.reference.message_id)
+            # parse message to get old values
+            values = parse_message_str(message.content)
+        except (discord.errors.NotFound, ValueError, KeyError):
+            return await ctx.respond("Could not find source message")
+
+        # override args if present
+        if prompt is not None:
+            values[PROMPT] = prompt
+        if negative_prompt is not None:
+            values[NEG_PROMPT] = negative_prompt
+        if batch_size is not None:
+            values[BATCH_SIZE] = batch_size
+
+        # handle image override if set
+        if image is not None:
+            image_url = image.url
+        if image_url is not None:
+            values["image_url"] = image_url
+
+        # fill out remaining params
+        for name, value in override_values.items():
+            # override param if it is explicitly set
+            if value is not None:
+                values[name] = value
+                continue
+            
+            # otherwise use old value if set
+            if name in values and values[name] is not None:
+                continue
+
+            # at this point, fall back to preference and global defaults
+            # attempt to pull default value from user preferences
+            value = self.bot.sd_user_preferences.get_preference(
+                ctx.author.id, name)
+
+            # otherwise fall back to global default
+            if value is None:
+                value = AGAIN_CONFIG[name]["default"]
+            
+            values[name] = value
+
+        await self._process_request(ctx, **values)
 
 
 def setup(bot: StableDiffusionDiscordBot):
