@@ -23,6 +23,7 @@ from discord.ext import commands
 from modules.cogs.discord_arg_consts import (DISCORD_ARG_DICT_AGAIN,
                                              DISCORD_ARG_DICT_IMG2IMG,
                                              DISCORD_ARG_DICT_TXT2IMG)
+from modules.cogs.discord_utils import check_channel
 from modules.consts import *
 from modules.sd_discord_bot import StableDiffusionDiscordBot
 from modules.utils import (async_add_arguments, b64encode_image,
@@ -234,6 +235,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         self._handle_typing(ctx.channel)
 
     @discord.slash_command(description="generate images from text with stable diffusion")
+    @check_channel()
     @commands.cooldown(1, 1, commands.BucketType.user)
     @async_add_arguments(DISCORD_ARG_DICT_TXT2IMG)
     async def txt2img(self, ctx: discord.ApplicationContext,
@@ -255,10 +257,6 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
             skip_prefixes (discord.Option[bool]): Flag to indicate if prompt and negative prompt prefixes should be skipped.
             **values (discord.Option[dict]): The arguments for the image generation.
         """
-
-        if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
-            return await ctx.respond("Unsupported text channel")
-
         # ensure no values remain as None
         for name, value in values.items():
             # attempt to pull default value from user preferences
@@ -281,6 +279,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         await self._process_request(ctx, prompt, negative_prompt, batch_size, **values)
 
     @discord.slash_command(description="generate images using image as base with stable diffusion")
+    @check_channel()
     @commands.cooldown(1, 1, commands.BucketType.user)
     @async_add_arguments(DISCORD_ARG_DICT_IMG2IMG)
     async def img2img(self, ctx: discord.ApplicationContext,
@@ -304,10 +303,6 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
             skip_prefixes (discord.Option[bool]): Flag to indicate if prompt and negative prompt prefixes should be skipped.
             **values (discord.Option[dict]): The arguments for the image generation.
         """
-
-        if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
-            return await ctx.respond("Unsupported text channel")
-
         # ensure no values remain as None
         for name, value in values.items():
             # attempt to pull default value from user preferences
@@ -336,6 +331,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         await self._process_request(ctx, prompt, negative_prompt, batch_size, image_url, **values)
 
     @discord.slash_command(description="Redo a txt2img or img2img, overriding previous values with given values.")
+    @check_channel()
     @commands.cooldown(1, 1, commands.BucketType.user)
     @async_add_arguments(DISCORD_ARG_DICT_AGAIN)
     async def again(self, ctx: discord.ApplicationContext,
@@ -346,9 +342,6 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
                     image: discord.Option(discord.Attachment, description="Image for img2img, overrides image_url (will use denoising strength)", required=False),
                     image_url: discord.Option(str, description="Image url for img2img (will use denoising strength)", required=False),
                     **override_values: dict):
-        if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
-            return await ctx.respond("Unsupported text channel")
-
         try:
             message_id = int(message_id_or_content)
             try:

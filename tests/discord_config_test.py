@@ -17,6 +17,16 @@ SAMPLE_CONFIG = {
         "2222": 2,
         "default": 100
     },
+    "guilds": {
+        "100": {
+            "description": "guild 100"
+        }
+    },
+    "categories": {
+        "10": {
+            "description": "channel category foo"
+        }
+    },
     "channels": {
         "0": {
             "description": "0",
@@ -61,6 +71,9 @@ def test_sample_config():
     for channel in channels:
         assert config.is_supported_channel(channel)
     assert not config.is_supported_channel(len(channels))
+
+    assert config.is_supported_category(10)
+    assert config.is_supported_guild(100)
 
     # channels 0, 1, 2 are not spoiler tag mandated
     for i in range(3):

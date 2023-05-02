@@ -13,8 +13,9 @@ import discord
 from discord.ext import commands
 
 from modules.cogs.discord_arg_consts import DISCORD_ARG_DICT_ALL
+from modules.cogs.discord_utils import check_channel
 from modules.sd_discord_bot import StableDiffusionDiscordBot
-from modules.utils import async_add_arguments
+from modules.utils import async_add_arguments, validate_params
 
 
 class DiscordUserPreferenceCommands(commands.Cog):
@@ -44,6 +45,7 @@ class DiscordUserPreferenceCommands(commands.Cog):
         self.bot: StableDiffusionDiscordBot = bot
 
     @discord.slash_command(description="Retrieves users preferences")
+    @check_channel()
     @commands.cooldown(1, 1, commands.BucketType.user)
     async def get_preferences(self, ctx: discord.ApplicationContext) -> None:
         """
@@ -52,9 +54,6 @@ class DiscordUserPreferenceCommands(commands.Cog):
         Args:
             ctx (discord.ApplicationContext): The context of the command.
         """
-        if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
-            return await ctx.respond("Unsupported text channel")
-
         preferences: dict = self.bot.sd_user_preferences.get_preferences(
             ctx.author.id)
         preferences_string = "Default preferences:\n" if preferences else "No default preferences"
@@ -64,6 +63,7 @@ class DiscordUserPreferenceCommands(commands.Cog):
         await ctx.respond(preferences_string)
 
     @discord.slash_command(description="Set users default preferences")
+    @check_channel()
     @commands.cooldown(1, 1, commands.BucketType.user)
     @async_add_arguments(DISCORD_ARG_DICT_ALL)
     async def set_preferences(self, ctx: discord.ApplicationContext, **kwargs: dict) -> None:
@@ -75,9 +75,6 @@ class DiscordUserPreferenceCommands(commands.Cog):
             ctx (discord.ApplicationContext): The context of the command.
             **kwargs (dict): The keyword arguments containing the preferences to set.
         """
-        if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
-            return await ctx.respond("Unsupported text channel")
-
         response = ""
         for name, value in kwargs.items():
             if value is not None:

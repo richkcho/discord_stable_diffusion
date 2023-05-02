@@ -44,18 +44,17 @@ class DiscordConfig:
 
         Args:
         - config (dict): A dictionary representing the bot configuration.
-
-        Raises:
-        - ValueError: If the given configuration lacks supported channels.
-
         """
         if config is None:
             config = {}
 
         self._config = config
         if "channels" not in config:
-            raise ValueError(
-                "config lacks supported channels, bot will not do much")
+            config["channels"] = {}
+        if "categories" not in config:
+            config["categories"] = {}
+        if "guilds" not in config:
+            config["guilds"] = {}
 
     def check_dict_try_get(self, key, outer_key, config: dict):
         """
@@ -111,14 +110,42 @@ class DiscordConfig:
         Returns:
         - True if the channel is supported, False otherwise.
         """
-        channel = str(channel_id)
-
-        if channel in self._config["channels"]:
+        if str(channel_id) in self._config["channels"]:
             return True
 
         return False
 
-    def in_flight_gen_cap(self, user: int, channel_id: int) -> int:
+    def is_supported_category(self, category_id: int) -> bool:
+        """
+        Determines whether a given category is supported.
+
+        Args:
+        - category_id (int): The ID of the category to check.
+
+        Returns:
+        - True if the category is supported, False otherwise.
+        """
+        if str(category_id) in self._config["categories"]:
+            return True
+
+        return False
+
+    def is_supported_guild(self, guild_id: int) -> bool:
+        """
+        Determines whether a given category is supported.
+
+        Args:
+        - guild_id (int): The ID of the guild to check.
+
+        Returns:
+        - True if the guild is supported, False otherwise.
+        """
+        if str(guild_id) in self._config["guilds"]:
+            return True
+
+        return False
+
+    def in_flight_gen_cap(self, user: int, channel_id: Optional[int] = None, category_id: Optional[int] = None, guild_id: Optional[int] = None) -> int:
         """
         Return the maximum number of in-flight message generators that can be run
         simultaneously by a user in a given channel. The rate is determined by
@@ -127,7 +154,9 @@ class DiscordConfig:
 
         Parameters:
         user (int): The user ID to check the rate limit for.
-        channel_id (int): The channel ID to check the rate limit for.
+        channel_id (Optional[int]): The channel ID to check the rate limit for.
+        category (Optional[int]): The category ID to check the rate limit for.
+        guild (Optional[int]): The guild ID to check the rate limit for.
 
         Returns:
         int: The maximum number of in-flight message generators allowed for the
@@ -139,9 +168,19 @@ class DiscordConfig:
         cap = self.check_dict_try_get(user, "in_flight_cap", self._config)
 
         # fall back to specific rate for channel
-        if cap is None:
+        if cap is None and channel_id is not None:
             cap = self.check_dict_try_get(
                 "in_flight_cap", str(channel_id), self._config["channels"])
+
+        # fall back to specific rate for category
+        if cap is None and category_id is not None:
+            cap = self.check_dict_try_get(
+                "in_flight_cap", str(category_id), self._config["categories"])
+
+        # fall back to specific rate for guild
+        if cap is None and guild_id is not None:
+            cap = self.check_dict_try_get(
+                "in_flight_cap", str(guild_id), self._config["guilds"])
 
         # check if global default rate is set
         if cap is None:

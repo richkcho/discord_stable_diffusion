@@ -3,6 +3,7 @@ import discord
 from discord.commands import SlashCommandGroup
 from discord.ext import commands
 
+from modules.cogs.discord_utils import check_channel
 from modules.consts import *
 from modules.sd_discord_bot import StableDiffusionDiscordBot
 
@@ -15,11 +16,9 @@ class InfoCommands(commands.Cog):
         "info", "Information related commands")
 
     @info.command(description="Get list of supported stable diffusion models")
+    @check_channel()
     @commands.cooldown(1, 1, commands.BucketType.user)
     async def models(self, ctx: discord.ApplicationContext):
-        if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
-            return await ctx.respond("Unsupported text channel")
-
         response = "Supported models:\n"
         for model in BASE_PARAMS[MODEL]["supported_values"]:
             response += f"\t{model}\n"
@@ -27,11 +26,9 @@ class InfoCommands(commands.Cog):
         await ctx.respond(response)
 
     @info.command(description="Get list of supported vaes")
+    @check_channel()
     @commands.cooldown(1, 1, commands.BucketType.user)
     async def vaes(self, ctx: discord.ApplicationContext):
-        if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
-            return await ctx.respond("Unsupported text channel")
-
         response = "Supported vaes:\n"
         for vae in BASE_PARAMS[VAE]["supported_values"]:
             response += f"\t{vae}\n"
@@ -39,11 +36,9 @@ class InfoCommands(commands.Cog):
         await ctx.respond(response)
 
     @info.command(description="Get list of supported loras and their trigger word(s)")
+    @check_channel()
     @commands.cooldown(1, 1, commands.BucketType.user)
     async def loras(self, ctx: discord.ApplicationContext):
-        if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
-            return await ctx.respond("Unsupported text channel")
-
         response = "Supported loras:\n"
         for lora in LORAS:
             keywords = ", ".join(lora[1])
@@ -52,11 +47,9 @@ class InfoCommands(commands.Cog):
         await ctx.respond(response)
 
     @info.command(description="Get list of supported embeddings and their trigger word(s)")
+    @check_channel()
     @commands.cooldown(1, 1, commands.BucketType.user)
     async def embeddings(self, ctx: discord.ApplicationContext):
-        if not self.bot.sd_config.is_supported_channel(ctx.channel_id):
-            return await ctx.respond("Unsupported text channel")
-
         response = "Supported embeddings:\n"
         for embedding in EMBEDDINGS:
             keywords = ", ".join(embedding[1])
@@ -65,6 +58,7 @@ class InfoCommands(commands.Cog):
         await ctx.respond(response)
 
     @info.command(description="Get detailed usage info about a command.")
+    @check_channel()
     @commands.cooldown(1, 1, commands.BucketType.user)
     async def usage(self, ctx: discord.ApplicationContext,
                     command_name: discord.Option(str, choices=COMMAND_DOCUMENTATION.keys(),
