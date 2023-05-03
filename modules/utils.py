@@ -72,7 +72,7 @@ def async_add_arguments(arguments: dict):
     return decorator
 
 
-def max_batch_size(width: int, height: int, scale: float, upscaler: Optional[str]) -> int:
+def max_batch_size(width: int, height: int, scale: Optional[float], upscaler: Optional[str]) -> int:
     """
     Computes the maximum image batch size that can be handled by the supported GPUs.
 
@@ -85,10 +85,25 @@ def max_batch_size(width: int, height: int, scale: float, upscaler: Optional[str
     Returns:
         The maximum batch size of images that can be processed.
     """
-    max_pixel_count = MAX_PIXEL_COUNT_LATENT if upscaler is None or upscaler == "Latent" else MAX_PIXEL_COUNT_ESRGAN
+    if scale is None:
+        scale = 1
+    if upscaler is None:
+        upscaler = "Latent"
+
+    max_pixel_count = MAX_PIXEL_COUNT_LATENT if upscaler == "Latent" else MAX_PIXEL_COUNT_ESRGAN
     pixel_count = width * height * scale * scale
 
     return min(int(max_pixel_count / pixel_count), 4)
+
+
+def default_batch_size(width: int, height: int, scale: Optional[float]) -> int:
+    if scale is None:
+        scale = 1
+
+    if width * height * scale * scale > 768 * 768:
+        return 2
+
+    return 4
 
 
 async def download_image(url: str, timeout=10) -> Optional[Image.Image]:
@@ -137,7 +152,7 @@ def make_message_str(prompt: str, negative_prompt: str, batch_size: int, image_u
 
     if image_url is not None:
         ack_message += f"img2img resize mode: {values[RESIZE_MODE]}, denoising str {values[DENOISING_STR_IMG2IMG]:.2f}, url: {image_url}"
-    elif values[SCALE] > 1:
+    elif values[SCALE] is not None and values[SCALE] > 1:
         ack_message += f"Upscaling by {values[SCALE]:.2f} using highres upscaler {values[UPSCALER]}, {values[HIGHRES_STEPS]} steps. Denoising str {values[DENOISING_STR]:.2f}\n"
 
     return ack_message
@@ -245,5 +260,7 @@ def validate_params(values: dict) -> dict:
             elif data["type"] == int or data["type"] == float:
                 values[name] = max(values[name], data["min"])
                 values[name] = min(values[name], data["max"])
+        else:
+            values[name] = None
 
     return values

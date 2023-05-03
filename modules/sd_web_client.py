@@ -212,7 +212,7 @@ class StableDiffusionWebClient(threading.Thread):
             "negative_prompt": work_item.neg_prompt,
             "steps": work_item.steps,
             "image_cfg_scale": work_item.cfg,
-            "sampler_index": work_item.sampler,
+            "sampler_name": work_item.sampler,
             "seed": work_item.seed,
             "width": work_item.width,
             "height": work_item.height,
@@ -223,6 +223,10 @@ class StableDiffusionWebClient(threading.Thread):
                 "data:image/png;base64," + work_item.image_b64
             ]
         }
+        payload["override_settings"] = {
+            "sd_vae": work_item.vae
+        }
+        payload["override_settings_restore_afterwards"] = True
 
         return requests.post(url=self._url("sdapi/v1/img2img"), timeout=300, json=payload).json()
 

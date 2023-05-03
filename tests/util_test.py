@@ -73,6 +73,8 @@ def test_message_parsing():
         SCALE: 1
     }
 
+    validate_params(initial_values)
+
     parsed_dict = parse_message_str(
         make_message_str(image_url=None, **initial_values))
     assert parsed_dict == initial_values

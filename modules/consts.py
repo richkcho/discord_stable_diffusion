@@ -38,6 +38,7 @@ DENOISING_STR_IMG2IMG = "denoising_strength_img2img"
 RESIZE_MODE = "resize_mode"
 AUTOSIZE = "autosize"
 AUTOSIZE_MAXSIZE = "autosize_maxsize"
+RESIZE_SCALE = "resize_scale"
 
 PREFIX_PARAMS = {
     PREFIX: {
@@ -167,11 +168,11 @@ IMG2IMG_PARAMS = {
         "description": "how to resize images for img2img",
         "supported_values": ["Just resize", "Crop and resize", "Resize and fill", "Just resize (latent upscale)"]
     },
-    SCALE: {
+    RESIZE_SCALE: {
         "type": float,
         "default": 1,
-        "description": "ratio to upscale the image by. Leave at 1 for no upscaling",
-        "min": 1,
+        "description": f"ratio to resize the image by. Applies after `{AUTOSIZE}` if set.",
+        "min": 0.5,
         "max": 2
     },
 }

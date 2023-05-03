@@ -27,8 +27,9 @@ from modules.cogs.discord_utils import check_channel
 from modules.consts import *
 from modules.sd_discord_bot import StableDiffusionDiscordBot
 from modules.utils import (async_add_arguments, b64encode_image,
-                           download_image, make_message_str, max_batch_size,
-                           parse_message_str, validate_params)
+                           default_batch_size, download_image,
+                           make_message_str, max_batch_size, parse_message_str,
+                           validate_params)
 from modules.work_item import WorkItem
 
 
@@ -145,21 +146,8 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if self.bot.sd_work_queue.qsize() > QUEUE_MAX_SIZE:
             return await ctx.respond("Work queue is at maximum size, please wait before making your next request")
 
-        # make sure args seem sane, if present
+        # make sure args seem sane / are set to None if nothing was given
         validate_params(values)
-
-        # set these to default "no-op" values if not set
-        # consider a cleaner way to do this
-        if SCALE not in values:
-            values[SCALE] = 1
-        if UPSCALER not in values:
-            values[UPSCALER] = "Latent"
-        if AUTOSIZE not in values:
-            values[AUTOSIZE] = False
-        if PREFIX not in values:
-            values[PREFIX] = None
-        if NEG_PREFIX not in values:
-            values[NEG_PREFIX] = None
 
         # img2img: validate image, update image size to image if autosize is set
         image_b64 = None
@@ -169,27 +157,22 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
                 return await ctx.respond("Unable to retrieve image (bad file type or image no longer exists)")
             image_b64 = b64encode_image(image)
 
-            # if user set scale, that overrides autosize
-            if values[SCALE] > 1:
-                # scale behaves "differently" in img2img compared to txt2img, we just apply scale to image dimension
-                # values directly
-                values[WIDTH] = int(values[WIDTH] * values[SCALE])
-                values[HEIGHT] = int(values[HEIGHT] * values[SCALE])
-                values[SCALE] = 1
-            elif values[AUTOSIZE]:
-                # automatically set width and height to within maxsize, keeping aspect ratio
+            # automatically set width and height to within maxsize, keeping aspect ratio
+            if values[AUTOSIZE]:
                 autosize_max = values[AUTOSIZE_MAXSIZE]
                 max_dim = max(image.size)
                 ratio = autosize_max / max_dim
                 values[WIDTH], values[HEIGHT] = [
                     int(ratio * dim) for dim in image.size]
+            # if user set resize scale, do that after autosize
+            if values[RESIZE_SCALE] is not None:
+                values[WIDTH] = int(values[WIDTH] * values[RESIZE_SCALE])
+                values[HEIGHT] = int(values[HEIGHT] * values[RESIZE_SCALE])
 
         # set default batch size according to image size
         if batch_size is None:
-            if values[HEIGHT] * values[WIDTH] * values[SCALE] * values[SCALE] > 512 * 512:
-                batch_size = 2
-            else:
-                batch_size = 4
+            batch_size = default_batch_size(
+                values[WIDTH], values[HEIGHT], values[SCALE])
 
         # validate batch size
         batch_size = min(batch_size, max_batch_size(

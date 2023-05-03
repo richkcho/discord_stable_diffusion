@@ -45,7 +45,7 @@ def discord_worker(work_queue: AioQueue, result_queue: AioQueue, preferences: Us
     asyncio.set_event_loop(asyncio.new_event_loop())
 
     bot = StableDiffusionDiscordBot(
-        preferences, config, work_queue, result_queue, test_guilds=config.get_channels())
+        preferences, config, work_queue, result_queue)
     bot.load_cogs()
     bot.run(api_key)
 
