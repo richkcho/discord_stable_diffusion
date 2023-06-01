@@ -13,9 +13,13 @@ import asyncio
 import os
 import threading
 import time
+from subprocess import Popen
+from typing import List
 
 from aioprocessing import AioQueue
+import torch
 
+from modules.consts import BASE_PORT
 from modules.discord_config import DiscordConfig, load_config
 from modules.sd_controller import StableDiffusionController
 from modules.user_preferences import UserPreferences, load_preferences, save_preferences
@@ -70,7 +74,21 @@ def main():
     preferences = load_preferences(preferences_file)
     config = load_config(config_file)
 
-    sd_controller = StableDiffusionController(work_queue, result_queue)
+    # fire up the stable diffusion webui instances
+    # TODO: make this a discord config thingy
+    webui_procs: List[Popen] = []
+    webui_ports: List[int] = []
+    for device_id in range(torch.cuda.device_count()):
+        port = BASE_PORT + device_id
+        cmd = ["python", "launch.py", "--device-id",
+               str(device_id), "--port", str(port), "--api", "--xformers", "--medvram"]
+
+        webui_ports.append(port)
+        webui_procs.append(Popen(cmd, cwd="./stable-diffusion-webui"))
+
+    # launch the web ui threads
+    sd_controller = StableDiffusionController(
+        work_queue, result_queue, webui_ports)
     sd_controller.start()
 
     # start discord bot
@@ -89,6 +107,10 @@ def main():
 
     sd_controller.stop = True
     sd_controller.join()
+
+    for proc in webui_procs:
+        proc.terminate()
+        proc.wait(5)
 
 
 if __name__ == "__main__":

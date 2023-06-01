@@ -12,7 +12,7 @@ import os
 from modules.discord_config import DiscordConfig, load_config
 
 SAMPLE_CONFIG = {
-    "in_flight_cap": {
+    "user_in_flight_caps": {
         "1111": 999,
         "2222": 2,
         "default": 100
@@ -48,7 +48,8 @@ SAMPLE_CONFIG = {
         "4": {
             "description": "4"
         }
-    }
+    },
+    "llm_url": "http://localhost:8000/"
 }
 
 

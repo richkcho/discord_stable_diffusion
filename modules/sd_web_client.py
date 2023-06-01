@@ -45,7 +45,7 @@ class StableDiffusionWebClient(threading.Thread):
         run(): Runs the worker thread.
     """
 
-    def __init__(self, result_queue: AioQueue, port: int, api_proc: Popen):
+    def __init__(self, result_queue: AioQueue, port: int):
         """
         Initializes a StableDiffusionWebClient worker.
 
@@ -58,7 +58,6 @@ class StableDiffusionWebClient(threading.Thread):
         self._work_queue: LockedList[WorkItem] | None = None
         self._result_queue = result_queue
         self._port = port
-        self._api_proc = api_proc
         self._options = None
         self._lock = threading.Lock()
         self.stop = False
@@ -323,11 +322,6 @@ class StableDiffusionWebClient(threading.Thread):
             work_item = self._pull_work_item()
             self._process_work_item(work_item)
             self._result_queue.put(work_item)
-
-
-        if self._api_proc is not None:
-            self._api_proc.terminate()
-            self._api_proc.wait(5)
 
     def __del__(self):
         self.stop = True

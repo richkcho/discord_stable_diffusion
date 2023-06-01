@@ -165,7 +165,8 @@ class DiscordConfig:
         user = str(user)
 
         # try to get specific rate for user
-        cap = self.check_dict_try_get(user, "in_flight_cap", self._config)
+        cap = self.check_dict_try_get(
+            user, "user_in_flight_caps", self._config)
 
         # fall back to specific rate for channel
         if cap is None and channel_id is not None:
@@ -182,10 +183,10 @@ class DiscordConfig:
             cap = self.check_dict_try_get(
                 "in_flight_cap", str(guild_id), self._config["guilds"])
 
-        # check if global default rate is set
+        # check if global default user cap is set
         if cap is None:
             cap = self.check_dict_try_get(
-                "default", "in_flight_cap", self._config)
+                "default", "user_in_flight_caps", self._config)
 
         if cap is not None:
             return cap
@@ -210,6 +211,9 @@ class DiscordConfig:
 
         return channel_dict["img_spoiler_tag"]
 
+    def get_llm_url(self) -> str:
+        return self._config["llm_url"]
+    
     def to_dict(self) -> dict:
         """
         Returns the configuration dictionary for the bot.

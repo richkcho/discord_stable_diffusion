@@ -11,13 +11,11 @@ None.
 import queue
 import threading
 import time
-from subprocess import Popen
 from typing import Dict, List, Tuple
 
-import torch
 from aioprocessing import AioQueue
 
-from modules.consts import (BASE_PARAMS, BASE_PORT, MODEL, QUEUE_MAX_SIZE,
+from modules.consts import (BASE_PARAMS, MODEL, QUEUE_MAX_SIZE,
                             SOFT_DEADLINE)
 from modules.locked_list import LockedList
 from modules.sd_web_client import StableDiffusionWebClient
@@ -40,7 +38,7 @@ class StableDiffusionController(threading.Thread):
     Methods:
     - run(self): runs the controller.
     """
-    def __init__(self, work_queue: AioQueue, result_queue: AioQueue) -> None:
+    def __init__(self, work_queue: AioQueue, result_queue: AioQueue, ports: List[int]) -> None:
         """Initializes a new StableDiffusionController object.
 
         Args:
@@ -53,20 +51,17 @@ class StableDiffusionController(threading.Thread):
         self.work_queue = work_queue
         self.result_queue = result_queue
         self.stop = False
+        self.ports_ = ports
 
         self._initialize_queues()
 
-    def _start_worker(self, device_id: int):
+    def _start_worker(self, port: int):
         """Starts a worker.
 
         Args:
-        - device_id (int): the ID of the GPU to use.
+        - port: the port of the stable diffusion webui instance.
         """
-        port = BASE_PORT + device_id
-        cmd = ["python", "launch.py", "--device-id", str(device_id), "--port", str(port), "--api", "--xformers", "--medvram"]
-
-        api_proc = Popen(cmd, cwd="./stable-diffusion-webui")
-        worker = StableDiffusionWebClient(self.result_queue, port, api_proc)
+        worker = StableDiffusionWebClient(self.result_queue, port)
         worker.start()
 
         self.workers.append(worker)
@@ -176,23 +171,14 @@ class StableDiffusionController(threading.Thread):
             total += q.size()
         return total
 
-    def _device_count(self):
-        """
-        Returns the number of GPUs.
-
-        Returns:
-        - count (int): the number of GPUs.
-        """
-        return torch.cuda.device_count()
-
     def run(self):
         """
         Runs the controller.
         """
         models = BASE_PARAMS[MODEL]["supported_values"]
 
-        for gpu_id in range(self._device_count()):
-            self._start_worker(gpu_id)
+        for port in self.ports_:
+            self._start_worker(port)
 
         # attach workers to queues according to current model
         for worker in self.workers:

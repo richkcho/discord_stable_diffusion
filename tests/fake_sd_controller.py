@@ -26,8 +26,7 @@ class FakeStableDiffusionController(StableDiffusionController):
             result_queue (AioQueue): A queue for outgoing results.
             num_workers (int): The number of workers to use for processing.
         """
-        super().__init__(work_queue, result_queue)
-        self.num_workers = num_workers
+        super().__init__(work_queue, result_queue, list(range(num_workers)))
         self.attach_count = 0
 
     def _start_worker(self, device_id: int):
@@ -67,12 +66,3 @@ class FakeStableDiffusionController(StableDiffusionController):
             total += worker.context_switches
 
         return total
-
-    def _device_count(self):
-        """
-        Get the number of devices available for processing.
-
-        Returns:
-            int: The number of devices.
-        """
-        return self.num_workers

@@ -29,9 +29,42 @@ from modules.sd_discord_bot import StableDiffusionDiscordBot
 from modules.utils import (async_add_arguments, b64encode_image,
                            default_batch_size, download_image,
                            make_message_str, max_batch_size, parse_message_str,
-                           validate_params)
+                           validate_params, txt2tag_request)
 from modules.work_item import WorkItem
 
+class InFlightWorkCtx:
+    def __init__(self, channel: Union[discord.abc.GuildChannel, discord.PartialMessageable, discord.Thread], user: int,
+                 ctx: discord.ApplicationContext, user_in_flight_gen_count: Dict[int, int], active_channels: Dict[int, int]):
+        self.channel: Union[discord.abc.GuildChannel, discord.PartialMessageable, discord.Thread] = channel
+        self.user: int = user
+        self.ctx: discord.ApplicationContext = ctx
+        self.user_in_flight_gen_count: Dict[int, int] = user_in_flight_gen_count
+        self.active_channels: Dict[int, int] = active_channels
+        self.closed = False
+
+        # increment count on creation and start typing indicator
+        user_in_flight_gen_count[user] += 1
+
+        async def typer(active_channels: Dict[int, int], channel: Union[discord.abc.GuildChannel, discord.PartialMessageable, discord.Thread]):
+            async with channel.typing():
+                while active_channels[channel.id] > 0:
+                    await asyncio.sleep(1)
+
+        if channel.id not in active_channels:
+            active_channels[channel.id] = 0
+
+        active_channels[channel.id] += 1
+
+        if active_channels[channel.id] == 1:
+            asyncio.get_event_loop().create_task(typer(active_channels, channel))
+    
+    def close(self):
+        if not self.closed:
+            self.user_in_flight_gen_count[self.user] -= 1
+            self.active_channels[self.channel.id] -= 1
+
+    def __del__(self):
+        self.close()
 
 class DiscordStableDiffusionGenerationCommands(commands.Cog):
     """
@@ -51,11 +84,18 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
     """
 
     def __init__(self, bot: StableDiffusionDiscordBot):
+        # reference to bot that holds this cog
         self.bot = bot
-        self.active_channels = {}
-        self.response_task = asyncio.get_event_loop().create_task(self._send_responses())
-        self.in_flight_commands: Dict[str, discord.ApplicationContext] = {}
+
+        # stores in flight command contexts
+        self.in_flight_commands: Dict[str, InFlightWorkCtx] = {}
+
+        # bookkeeping, used by InFlightWorkCtx
+        self.active_channels: Dict[int, int] = {}
         self.user_in_flight_gen_count: Dict[int, int] = {}
+
+        # async task to send responses from bot's work result queue
+        self.response_task = asyncio.get_event_loop().create_task(self._send_responses())
 
     async def _send_responses(self):
         """
@@ -78,10 +118,12 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
                 continue
 
             # remove work item from active items
-            ctx: discord.ApplicationContext = self.in_flight_commands.pop(
+            work_ctx: InFlightWorkCtx = self.in_flight_commands.pop(
                 work_item.context_handle)
-            self.active_channels[ctx.channel_id] -= 1
-            self.user_in_flight_gen_count[ctx.author.id] -= 1
+            
+            ctx: discord.ApplicationContext = work_ctx.ctx
+            
+            work_ctx.close()
 
             if len(work_item.images) == 0:
                 await ctx.respond(f"Error handling request. Reason: {work_item.error_message}")
@@ -98,28 +140,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
 
             await ctx.respond(f"{ctx.author.mention}", files=pictures_to_files(pictures, art_name))
 
-    def _handle_typing(self, channel: Union[discord.abc.GuildChannel, discord.PartialMessageable, discord.Thread]):
-        """
-        Handles typing indicator while there are active Stable Diffusion generations in a channel.
-
-        Args:
-            channel (Union[discord.abc.GuildChannel, discord.PartialMessageable, discord.Thread]): The channel to show
-            the typing indicator in.
-        """
-        async def typer(active_channels: dict, channel: Union[discord.abc.GuildChannel, discord.PartialMessageable, discord.Thread]):
-            async with channel.typing():
-                while active_channels[channel.id] > 0:
-                    await asyncio.sleep(1)
-
-        if channel.id not in self.active_channels:
-            self.active_channels[channel.id] = 0
-
-        self.active_channels[channel.id] += 1
-
-        if self.active_channels[channel.id] == 1:
-            asyncio.get_event_loop().create_task(typer(self.active_channels, channel))
-
-    async def _process_request(self, ctx: discord.ApplicationContext, prompt: str, negative_prompt: str, batch_size: Optional[int], image_url: Optional[str] = None, **values: dict):
+    async def _process_request(self, ctx: discord.ApplicationContext, prompt: str, negative_prompt: str, batch_size: Optional[int], image_url: Optional[str] = None, add_booru_tags: bool = False, **values: dict):
         """
         Processes a request to generate images using Stable Diffusion.
 
@@ -134,7 +155,10 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         # unique handle associated with this request
         command_handle = str(ctx.author.id) + str(int(time.time()))
 
-        # validate that user does not exceed in flight gens
+        # validate queue depth
+        if self.bot.sd_work_queue.qsize() > QUEUE_MAX_SIZE:
+            return await ctx.respond("Work queue is at maximum size, please wait before making your next request")
+
         if ctx.author.id not in self.user_in_flight_gen_count:
             self.user_in_flight_gen_count[ctx.author.id] = 0
 
@@ -142,9 +166,8 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if self.user_in_flight_gen_count[ctx.author.id] >= self.bot.sd_config.in_flight_gen_cap(ctx.author.id, ctx.channel_id):
             return await ctx.respond("Maximum in flight generations hit, please wait until some of your generations finish")
 
-        # validate queue depth
-        if self.bot.sd_work_queue.qsize() > QUEUE_MAX_SIZE:
-            return await ctx.respond("Work queue is at maximum size, please wait before making your next request")
+        # increment in flight count now, since operations past here can take a long time
+        work_ctx = InFlightWorkCtx(ctx.channel, ctx.author.id, ctx, self.user_in_flight_gen_count, self.active_channels)
 
         # make sure args seem sane / are set to None if nothing was given
         validate_params(values)
@@ -183,6 +206,14 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if values[SEED] == -1:
             values[SEED] = int(random.randrange(4294967294))
 
+        # apply txt2tag
+        # TODO: make this dispatch to work queue
+        if add_booru_tags:
+            await ctx.respond(f"Generating tags for prompt: {prompt}")
+            tags = await txt2tag_request(self.bot.sd_config.get_llm_url(), prompt)
+            if tags is not None:
+                prompt += tags
+
         # concatencate prefixes
         if values[PREFIX] is not None:
             prompt = values[PREFIX] + ", " + prompt
@@ -203,8 +234,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
                 values[SCALE], values[UPSCALER], values[HIGHRES_STEPS], values[DENOISING_STR])
 
         self.bot.sd_work_queue.put(work_item)
-        self.in_flight_commands[command_handle] = ctx
-        self.user_in_flight_gen_count[ctx.author.id] += 1
+        self.in_flight_commands[command_handle] = work_ctx
 
         ack_message = make_message_str(
             prompt, negative_prompt, batch_size, image_url, **values)
@@ -214,8 +244,6 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
             await ctx.respond(ack_message, embed=embed)
         else:
             await ctx.respond(ack_message)
-
-        self._handle_typing(ctx.channel)
 
     @discord.slash_command(description="generate images from text with stable diffusion")
     @check_channel()
@@ -228,6 +256,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
                       skip_prefixes: discord.Option(bool, default=False, description="Do not add prefixes to prompt and negative prompt. Overrides skip_prefix and skip_neg_prefix"),
                       skip_prefix: discord.Option(bool, default=False, description="Do not add prefix to prompt"),
                       skip_neg_prefix: discord.Option(bool, default=False, description="Do not add negative prefix to prompt"),
+                      add_booru_tags: discord.Option(bool, default=False, description="Use LLM to add booru tags to your prompt"),
                       **values: dict) -> None:
         """
         A slash command that generates images using Stable Diffusion. See DISCORD_ARG_DICT for what options can be 
@@ -259,7 +288,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if skip_neg_prefix or skip_prefixes:
             values[NEG_PREFIX] = None
 
-        await self._process_request(ctx, prompt, negative_prompt, batch_size, **values)
+        await self._process_request(ctx, prompt, negative_prompt, batch_size, add_booru_tags=add_booru_tags, **values)
 
     @discord.slash_command(description="generate images using image as base with stable diffusion")
     @check_channel()
@@ -311,7 +340,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if image_url is None:
             return await ctx.respond("img2img requires an image input")
 
-        await self._process_request(ctx, prompt, negative_prompt, batch_size, image_url, **values)
+        await self._process_request(ctx, prompt, negative_prompt, batch_size, image_url=image_url, **values)
 
     @discord.slash_command(description="Redo a txt2img or img2img, overriding previous values with given values.")
     @check_channel()
