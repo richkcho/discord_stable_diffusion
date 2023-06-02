@@ -92,8 +92,9 @@ def test_sample_config():
     for i in range(3):
         assert not config.channel_requires_spoiler_tag(i)
 
-    # channel 3 is
     assert config.channel_requires_spoiler_tag(3)
+
+    assert not config.channel_requires_spoiler_tag(6969)
 
     # channels 0-3 have channel in flight caps of 1-4. unknown users cap should fall back to channel cap
     unknown_user = 0

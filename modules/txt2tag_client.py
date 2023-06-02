@@ -58,7 +58,12 @@ class Txt2TagClient:
         llm = self._choose_llm()
 
         start_time = time.time()
-        output = await self._do_request(llm.url, text, timeout)
+        try:
+            output = await self._do_request(llm.url, text, timeout)
+        except Exception as e:
+            print(e)
+            return None
+        
         if output is None:
             return None
         

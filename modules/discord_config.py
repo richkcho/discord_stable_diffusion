@@ -98,7 +98,12 @@ class DiscordConfig:
 
         """
         channel = str(channel_id)
-        return self.check_dict_try_get(channel, "channels", self._config)
+        channel_dict = self.check_dict_try_get(channel, "channels", self._config)
+
+        if channel_dict is None:
+            return {}
+        
+        return channel_dict
 
     def is_supported_channel(self, channel_id: int) -> bool:
         """
