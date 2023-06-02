@@ -18,7 +18,7 @@ from PIL import Image
 
 from modules.consts import *
 from modules.locked_list import LockedList
-from modules.work_item import WorkItem
+from modules.sd_work_item import SDWorkItem
 
 
 class StableDiffusionWebClient(threading.Thread):
@@ -40,12 +40,12 @@ class StableDiffusionWebClient(threading.Thread):
         get_options(refresh: bool = False) -> dict | None: Returns the options from the Stable Diffusion API.
         set_options(values: dict) -> bool: Sets the options for the Stable Diffusion API.
         detach_from_queue(): Detaches the worker thread from the work queue.
-        attach_to_queue(work_queue: LockedList[WorkItem]): Attaches the worker thread to a work queue.
-        get_queue() -> LockedList[WorkItem]: Returns the work queue.
+        attach_to_queue(work_queue: LockedList[SDWorkItem]): Attaches the worker thread to a work queue.
+        get_queue() -> LockedList[SDWorkItem]: Returns the work queue.
         run(): Runs the worker thread.
     """
 
-    def __init__(self, result_queue: AioQueue, port: int):
+    def __init__(self, result_queue: AioQueue, base_url: str):
         """
         Initializes a StableDiffusionWebClient worker.
 
@@ -55,21 +55,12 @@ class StableDiffusionWebClient(threading.Thread):
             api_proc (Popen): The process object of the Stable Diffusion webui process.
         """
         super().__init__()
-        self._work_queue: LockedList[WorkItem] | None = None
+        self._work_queue: LockedList[SDWorkItem] | None = None
         self._result_queue = result_queue
-        self._port = port
+        self._base_url = base_url
         self._options = None
         self._lock = threading.Lock()
         self.stop = False
-
-    def _base_url(self) -> str:
-        """
-        Private method to get the base URL for the Stable Diffusion API.
-
-        Returns:
-            str: The base URL for the Stable Diffusion API.
-        """
-        return f"http://localhost:{self._port}"
 
     def _url(self, path: str) -> str:
         """
@@ -81,7 +72,7 @@ class StableDiffusionWebClient(threading.Thread):
         Returns:
             str: The full URL for the given API path.
         """
-        return f"{self._base_url()}/{path}"
+        return f"{self._base_url}/{path}"
 
     def get_model(self):
         """
@@ -159,7 +150,7 @@ class StableDiffusionWebClient(threading.Thread):
 
         return False
 
-    def _txt2img(self, work_item: WorkItem) -> dict:
+    def _txt2img(self, work_item: SDWorkItem) -> dict:
         """
         Sends a text prompt to the Stable Diffusion API and returns the generated images.
 
@@ -195,7 +186,7 @@ class StableDiffusionWebClient(threading.Thread):
 
         return requests.post(url=self._url("sdapi/v1/txt2img"), timeout=300, json=payload).json()
 
-    def _img2img(self, work_item: WorkItem) -> dict:
+    def _img2img(self, work_item: SDWorkItem) -> dict:
         """
         Sends a img2img prompt to the Stable Diffusion API and returns the generated images.
 
@@ -230,7 +221,7 @@ class StableDiffusionWebClient(threading.Thread):
         return requests.post(url=self._url("sdapi/v1/img2img"), timeout=300, json=payload).json()
 
 
-    def _process_work_item(self, work_item: WorkItem) -> None:
+    def _process_work_item(self, work_item: SDWorkItem) -> None:
         """
         Processes a work item by sending the text prompt to the Stable Diffusion API and putting the generated
         images into the result queue.
@@ -264,27 +255,27 @@ class StableDiffusionWebClient(threading.Thread):
         with self._lock:
             self._work_queue = None
 
-    def attach_to_queue(self, work_queue: LockedList[WorkItem]):
+    def attach_to_queue(self, work_queue: LockedList[SDWorkItem]):
         """
         Attaches the worker thread to a work queue.
 
         Args:
-            work_queue (LockedList[WorkItem]): The work queue to attach the worker thread to.
+            work_queue (LockedList[SDWorkItem]): The work queue to attach the worker thread to.
         """
         with self._lock:
             self._work_queue = work_queue
 
-    def get_queue(self) -> LockedList[WorkItem]:
+    def get_queue(self) -> LockedList[SDWorkItem]:
         """
         Returns the work queue.
 
         Returns:
-            LockedList[WorkItem]: The work queue.
+            LockedList[SDWorkItem]: The work queue.
         """
         with self._lock:
             return self._work_queue
 
-    def _pull_work_item(self) -> WorkItem:
+    def _pull_work_item(self) -> SDWorkItem:
         """
         Pulls a work item from the work queue.
 

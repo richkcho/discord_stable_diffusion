@@ -12,7 +12,7 @@ Functions:
 """
 
 import json
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from modules.consts import DEFAULT_IN_FLIGHT_GEN_CAP
 
@@ -211,9 +211,16 @@ class DiscordConfig:
 
         return channel_dict["img_spoiler_tag"]
 
-    def get_llm_url(self) -> str:
-        return self._config["llm_url"]
+    def get_llm_clients(self) -> str:
+        if "llm_clients" in self._config:
+            return self._config["llm_clients"]
+        return []
     
+    def get_sd_clients(self) -> List[dict]:
+        if "sd_clients" in self._config:
+            return self._config["sd_clients"]
+        return []
+
     def to_dict(self) -> dict:
         """
         Returns the configuration dictionary for the bot.

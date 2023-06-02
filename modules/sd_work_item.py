@@ -5,9 +5,9 @@ This module contains the WorkItem class, which represents an item of work to be 
 import time
 
 
-class WorkItem:
+class SDWorkItem:
     """
-    The WorkItem class represents an item of work to be processed by stable diffusion.
+    The SDWorkItem class represents an item of work to be processed by stable diffusion.
 
     Attributes:
         - model (str): the name of the model to use for image generation.

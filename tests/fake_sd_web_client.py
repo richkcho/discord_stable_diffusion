@@ -11,7 +11,7 @@ import time
 from aioprocessing import AioQueue
 
 from modules.sd_web_client import StableDiffusionWebClient
-from modules.work_item import WorkItem
+from modules.sd_work_item import SDWorkItem
 
 
 class FakeStableDiffusionWebClient(StableDiffusionWebClient):
@@ -46,7 +46,7 @@ class FakeStableDiffusionWebClient(StableDiffusionWebClient):
         """
         return self.test_model
 
-    def _process_work_item(self, work_item: WorkItem) -> None:
+    def _process_work_item(self, work_item: SDWorkItem) -> None:
         """
         Process a work item.
 

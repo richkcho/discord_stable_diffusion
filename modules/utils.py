@@ -106,36 +106,6 @@ def default_batch_size(width: int, height: int, scale: Optional[float]) -> int:
     return 4
 
 
-# TODO: wrap this into manager that can properly distribute workload
-async def txt2tag_request(base_url: str, text: str, timeout=60) -> Optional[str]:
-    txt2tag_prompt = f"You are a tool that helps tag danbooru images when given a textual image description. Provide me with danbooru tags that accurately fit the following description. {text}"
-    prompt = f" A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: {txt2tag_prompt} ASSISTANT:"
-    async with aiohttp.ClientSession() as session:
-        try:
-            data = {
-                "prompt": prompt,
-                "temperature": 0.6,
-                "top_p": 0.8,
-                "top_k": 40,
-                "repeat_penalty": 1.18,
-                "echo": False,
-                "max_tokens": 64,
-                "stop": [
-                    "\n",
-                    "</s>",
-                    "<s>",
-                    "User:"
-                ]
-            }
-            async with session.post(base_url + "v1/completions", json=data, timeout=timeout) as response:
-                if not response.ok:
-                    return None
-                output = await response.json()
-                return output["choices"][0]["text"]
-        except asyncio.TimeoutError:
-            return None
-
-
 async def download_image(url: str, timeout=10) -> Optional[Image.Image]:
     """
     Downloads an image at a given url, and returns an Image object

@@ -17,16 +17,16 @@ from subprocess import Popen
 from typing import List
 
 from aioprocessing import AioQueue
-import torch
 
 from modules.consts import BASE_PORT
 from modules.discord_config import DiscordConfig, load_config
 from modules.sd_controller import StableDiffusionController
 from modules.user_preferences import UserPreferences, load_preferences, save_preferences
 from modules.sd_discord_bot import StableDiffusionDiscordBot
+from modules.txt2tag_client import Txt2TagClient
 
 
-def discord_worker(work_queue: AioQueue, result_queue: AioQueue, preferences: UserPreferences, config: DiscordConfig):
+def discord_worker(work_queue: AioQueue, result_queue: AioQueue, txt2tag_client: Txt2TagClient, preferences: UserPreferences, config: DiscordConfig):
     """
     Starts the Discord bot.
 
@@ -49,7 +49,7 @@ def discord_worker(work_queue: AioQueue, result_queue: AioQueue, preferences: Us
     asyncio.set_event_loop(asyncio.new_event_loop())
 
     bot = StableDiffusionDiscordBot(
-        preferences, config, work_queue, result_queue)
+        txt2tag_client, preferences, config, work_queue, result_queue)
     bot.load_cogs()
     bot.run(api_key)
 
@@ -66,34 +66,58 @@ def main():
     preferences_file = "user_prefixes.json"
     config_file = "discord_config.json"
 
-    # work queue
-    work_queue = AioQueue()
-    result_queue = AioQueue()
+    # stable diffusion work queues
+    sd_work_queue = AioQueue()
+    sd_result_queue = AioQueue()
 
     # load user prefixes
     preferences = load_preferences(preferences_file)
     config = load_config(config_file)
 
     # fire up the stable diffusion webui instances
-    # TODO: make this a discord config thingy
     webui_procs: List[Popen] = []
-    webui_ports: List[int] = []
-    for device_id in range(torch.cuda.device_count()):
-        port = BASE_PORT + device_id
-        cmd = ["python", "launch.py", "--device-id",
-               str(device_id), "--port", str(port), "--api", "--xformers", "--medvram"]
+    webui_urls: List[str] = []
+    for sd_client in config.get_sd_clients():
+        if "device_id" in sd_client:
+            device_id = sd_client["device_id"]
+            port = BASE_PORT + device_id
+            cmd = ["python", "launch.py", "--device-id",
+                str(device_id), "--port", str(port), "--api", "--xformers", "--medvram"]
 
-        webui_ports.append(port)
-        webui_procs.append(Popen(cmd, cwd="./stable-diffusion-webui"))
+            url = f"http://localhost:{port}"
+            webui_urls.append(url)
+            webui_procs.append(Popen(cmd, cwd="./stable-diffusion-webui"))
+        elif "url" in sd_client:
+            url = sd_client["url"].strip("/")
+            webui_urls.append(url)
+        else:
+            raise ValueError("Bad sd client entry!")
 
-    # launch the web ui threads
+    llm_urls: List[str] = []
+    for llm_client in config.get_llm_clients():
+        if "url" in llm_client:
+            llm_urls.append(llm_client["url"].strip("/"))
+        else:
+            raise ValueError("Bad llm client entry")
+
+    if len(webui_urls) == 0:
+        raise ValueError("Can't run bot with 0 stable diffusion clients!")
+
+    # controls work scheduling for webui instances
     sd_controller = StableDiffusionController(
-        work_queue, result_queue, webui_ports)
+        sd_work_queue, sd_result_queue, webui_urls)
     sd_controller.start()
+
+    # llm request client
+    print(llm_urls)
+    if len(llm_urls) > 0:
+        txt2tag_client = Txt2TagClient(llm_urls)
+    else:
+        txt2tag_client = None
 
     # start discord bot
     threading.Thread(target=discord_worker, daemon=True, args=(
-        work_queue, result_queue, preferences, config)).start()
+        sd_work_queue, sd_result_queue, txt2tag_client, preferences, config)).start()
 
     while True:
         # run until termination

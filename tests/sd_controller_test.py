@@ -11,7 +11,7 @@ import time
 from aioprocessing import AioQueue
 
 from modules.consts import *
-from modules.work_item import WorkItem
+from modules.sd_work_item import SDWorkItem
 
 from .fake_sd_controller import FakeStableDiffusionController
 
@@ -31,7 +31,7 @@ def test_sd_controller_scheduling():
 
     item_count = 100
     for i in range(item_count):
-        work_item = WorkItem(random.choice(BASE_PARAMS[MODEL]["supported_values"]), "foo",
+        work_item = SDWorkItem(random.choice(BASE_PARAMS[MODEL]["supported_values"]), "foo",
                              "prompt", "neg-prompt", 512, 512, 30, 7, "Euler", 1, 1, str(i))
         work_item.creation_time -= random.randint(0, SOFT_DEADLINE)
         work_queue.put(work_item)

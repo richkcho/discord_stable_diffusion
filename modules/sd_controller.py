@@ -19,7 +19,7 @@ from modules.consts import (BASE_PARAMS, MODEL, QUEUE_MAX_SIZE,
                             SOFT_DEADLINE)
 from modules.locked_list import LockedList
 from modules.sd_web_client import StableDiffusionWebClient
-from modules.work_item import WorkItem
+from modules.sd_work_item import SDWorkItem
 
 
 class StableDiffusionController(threading.Thread):
@@ -38,7 +38,7 @@ class StableDiffusionController(threading.Thread):
     Methods:
     - run(self): runs the controller.
     """
-    def __init__(self, work_queue: AioQueue, result_queue: AioQueue, ports: List[int]) -> None:
+    def __init__(self, work_queue: AioQueue, result_queue: AioQueue, urls: List[str]) -> None:
         """Initializes a new StableDiffusionController object.
 
         Args:
@@ -47,21 +47,21 @@ class StableDiffusionController(threading.Thread):
         """
         super().__init__()
         self.workers: List[StableDiffusionWebClient] = []
-        self.queues: Dict[str, Tuple[LockedList[WorkItem], List[StableDiffusionWebClient]]] = {}
+        self.queues: Dict[str, Tuple[LockedList[SDWorkItem], List[StableDiffusionWebClient]]] = {}
         self.work_queue = work_queue
         self.result_queue = result_queue
         self.stop = False
-        self.ports_ = ports
+        self.urls = urls
 
         self._initialize_queues()
 
-    def _start_worker(self, port: int):
+    def _start_worker(self, url: str):
         """Starts a worker.
 
         Args:
-        - port: the port of the stable diffusion webui instance.
+        - url: the url of the stable diffusion webui instance.
         """
-        worker = StableDiffusionWebClient(self.result_queue, port)
+        worker = StableDiffusionWebClient(self.result_queue, url)
         worker.start()
 
         self.workers.append(worker)
@@ -72,7 +72,7 @@ class StableDiffusionController(threading.Thread):
         """
         models = BASE_PARAMS[MODEL]["supported_values"]
         for model in models:
-            self.queues[model] = (LockedList[WorkItem](), [])
+            self.queues[model] = (LockedList[SDWorkItem](), [])
 
     def _attach_worker_to_queue(self, worker: StableDiffusionWebClient, model: str):
         """
@@ -90,7 +90,7 @@ class StableDiffusionController(threading.Thread):
         worker.attach_to_queue(work_queue)
         worker_list.append(worker)
 
-    def _pull_work_item(self) -> WorkItem | None:
+    def _pull_work_item(self) -> SDWorkItem | None:
         """
         Pull a work item from the work queue.
 
@@ -107,7 +107,7 @@ class StableDiffusionController(threading.Thread):
         Schedules the queues for work by workers. Attempts to minimize switching between queues while soft limiting the 
         maximum latency of a given generation request. 
         """
-        def oldest_work_item(work_queue: LockedList[WorkItem], now: float) -> float:
+        def oldest_work_item(work_queue: LockedList[SDWorkItem], now: float) -> float:
             with work_queue.lock:
                 if work_queue.list:
                     return work_queue.list[0].creation_time
@@ -177,8 +177,8 @@ class StableDiffusionController(threading.Thread):
         """
         models = BASE_PARAMS[MODEL]["supported_values"]
 
-        for port in self.ports_:
-            self._start_worker(port)
+        for url in self.urls:
+            self._start_worker(url)
 
         # attach workers to queues according to current model
         for worker in self.workers:

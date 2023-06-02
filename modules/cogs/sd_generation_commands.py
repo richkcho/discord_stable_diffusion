@@ -29,8 +29,8 @@ from modules.sd_discord_bot import StableDiffusionDiscordBot
 from modules.utils import (async_add_arguments, b64encode_image,
                            default_batch_size, download_image,
                            make_message_str, max_batch_size, parse_message_str,
-                           validate_params, txt2tag_request)
-from modules.work_item import WorkItem
+                           validate_params)
+from modules.sd_work_item import SDWorkItem
 
 class InFlightWorkCtx:
     def __init__(self, channel: Union[discord.abc.GuildChannel, discord.PartialMessageable, discord.Thread], user: int,
@@ -113,8 +113,11 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
 
         while not self.bot.stop:
             try:
-                work_item: WorkItem = await self.bot.sd_result_queue.coro_get(timeout=1)
+                work_item: SDWorkItem = await self.bot.sd_result_queue.coro_get(timeout=1)
             except queue.Empty:
+                continue
+            
+            if work_item is None:
                 continue
 
             # remove work item from active items
@@ -207,12 +210,16 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
             values[SEED] = int(random.randrange(4294967294))
 
         # apply txt2tag
-        # TODO: make this dispatch to work queue
         if add_booru_tags:
-            await ctx.respond(f"Generating tags for prompt: {prompt}")
-            tags = await txt2tag_request(self.bot.sd_config.get_llm_url(), prompt)
-            if tags is not None:
-                prompt += tags
+            if self.bot.txt2tag_client is None:
+                return await ctx.respond("Generating booru tags not supported on this instance", ephemeral=True)
+            
+            await ctx.respond(f"Generating booru tags as requested for prompt: {prompt}")
+            tags = await self.bot.txt2tag_client.request_tags(prompt)
+            if tags is None:
+                return await ctx.respond("Failed to add booru tags")
+
+            prompt += " " + tags
 
         # concatencate prefixes
         if values[PREFIX] is not None:
@@ -222,7 +229,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
             negative_prompt = values[NEG_PREFIX] + ", " + negative_prompt
 
         # construct work item, ack message, and ship it. Do not modify values after this line
-        work_item = WorkItem(values[MODEL], values[VAE], prompt, negative_prompt, values[WIDTH], values[HEIGHT],
+        work_item = SDWorkItem(values[MODEL], values[VAE], prompt, negative_prompt, values[WIDTH], values[HEIGHT],
                              values[STEPS], values[CFG], values[SAMPLER], values[SEED], batch_size, command_handle)
 
         # upscaling and img2img are mutually exclusive (for now?).
@@ -238,9 +245,11 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
 
         ack_message = make_message_str(
             prompt, negative_prompt, batch_size, image_url, **values)
+        
         if image_url is not None:
             embed = discord.Embed()
             embed.set_image(url=image_url)
+
             await ctx.respond(ack_message, embed=embed)
         else:
             await ctx.respond(ack_message)
