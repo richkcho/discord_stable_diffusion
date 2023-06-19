@@ -8,7 +8,6 @@ from discord.ext import commands
 
 from modules.discord_config import DiscordConfig
 from modules.user_preferences import UserPreferences
-from modules.txt2tag_client import Txt2TagClient
 
 
 class StableDiffusionDiscordBot(discord.Bot):
@@ -35,7 +34,7 @@ class StableDiffusionDiscordBot(discord.Bot):
         on_application_command_error(context, exception): Handle Discord command errors.
     """
 
-    def __init__(self, txt2tag_client: Txt2TagClient, user_preferences: UserPreferences, sd_config: DiscordConfig, work_queue: AioQueue, result_queue: AioQueue, *args, **options):
+    def __init__(self, user_preferences: UserPreferences, sd_config: DiscordConfig, work_queue: AioQueue, result_queue: AioQueue, *args, **options):
         """
         Initialize StableDiffusionDiscordBot.
 
@@ -48,7 +47,6 @@ class StableDiffusionDiscordBot(discord.Bot):
             **options: Arbitrary keyword arguments.
         """
         super().__init__(*args, **options)
-        self.txt2tag_client = txt2tag_client
         self.sd_user_preferences = user_preferences
         self.sd_config = sd_config
         self.sd_work_queue = work_queue

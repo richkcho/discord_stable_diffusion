@@ -216,11 +216,6 @@ class DiscordConfig:
 
         return channel_dict["img_spoiler_tag"]
 
-    def get_llm_clients(self) -> str:
-        if "llm_clients" in self._config:
-            return self._config["llm_clients"]
-        return []
-    
     def get_sd_clients(self) -> List[dict]:
         if "sd_clients" in self._config:
             return self._config["sd_clients"]

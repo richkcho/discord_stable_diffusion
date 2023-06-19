@@ -49,11 +49,6 @@ SAMPLE_CONFIG = {
             "description": "4"
         }
     },
-    "llm_clients": [
-        {
-            "url": "http://172.26.72.78:8000/v1/completions"
-        }
-    ],
     "sd_clients": [
         {
             "device_id": 0

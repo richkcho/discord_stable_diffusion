@@ -23,10 +23,9 @@ from modules.discord_config import DiscordConfig, load_config
 from modules.sd_controller import StableDiffusionController
 from modules.user_preferences import UserPreferences, load_preferences, save_preferences
 from modules.sd_discord_bot import StableDiffusionDiscordBot
-from modules.txt2tag_client import Txt2TagClient
 
 
-def discord_worker(work_queue: AioQueue, result_queue: AioQueue, txt2tag_client: Txt2TagClient, preferences: UserPreferences, config: DiscordConfig):
+def discord_worker(work_queue: AioQueue, result_queue: AioQueue, preferences: UserPreferences, config: DiscordConfig):
     """
     Starts the Discord bot.
 
@@ -48,8 +47,7 @@ def discord_worker(work_queue: AioQueue, result_queue: AioQueue, txt2tag_client:
 
     asyncio.set_event_loop(asyncio.new_event_loop())
 
-    bot = StableDiffusionDiscordBot(
-        txt2tag_client, preferences, config, work_queue, result_queue)
+    bot = StableDiffusionDiscordBot(preferences, config, work_queue, result_queue)
     bot.load_cogs()
     bot.run(api_key)
 
@@ -93,13 +91,6 @@ def main():
         else:
             raise ValueError("Bad sd client entry!")
 
-    llm_urls: List[str] = []
-    for llm_client in config.get_llm_clients():
-        if "url" in llm_client:
-            llm_urls.append(llm_client["url"].strip("/"))
-        else:
-            raise ValueError("Bad llm client entry")
-
     if len(webui_urls) == 0:
         raise ValueError("Can't run bot with 0 stable diffusion clients!")
 
@@ -108,16 +99,9 @@ def main():
         sd_work_queue, sd_result_queue, webui_urls)
     sd_controller.start()
 
-    # llm request client
-    print(llm_urls)
-    if len(llm_urls) > 0:
-        txt2tag_client = Txt2TagClient(llm_urls)
-    else:
-        txt2tag_client = None
-
     # start discord bot
     threading.Thread(target=discord_worker, daemon=True, args=(
-        sd_work_queue, sd_result_queue, txt2tag_client, preferences, config)).start()
+        sd_work_queue, sd_result_queue, preferences, config)).start()
 
     while True:
         # run until termination

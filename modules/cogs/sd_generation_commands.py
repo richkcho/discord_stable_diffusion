@@ -143,7 +143,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
 
             await ctx.respond(f"{ctx.author.mention}", files=pictures_to_files(pictures, art_name))
 
-    async def _process_request(self, ctx: discord.ApplicationContext, prompt: str, negative_prompt: str, batch_size: Optional[int], image_url: Optional[str] = None, add_booru_tags: bool = False, **values: dict):
+    async def _process_request(self, ctx: discord.ApplicationContext, prompt: str, negative_prompt: str, batch_size: Optional[int], image_url: Optional[str] = None, **values: dict):
         """
         Processes a request to generate images using Stable Diffusion.
 
@@ -209,18 +209,6 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if values[SEED] == -1:
             values[SEED] = int(random.randrange(4294967294))
 
-        # apply txt2tag
-        if add_booru_tags:
-            if self.bot.txt2tag_client is None:
-                return await ctx.respond("Generating booru tags not supported on this instance", ephemeral=True)
-            
-            await ctx.respond(f"Generating booru tags as requested for prompt: {prompt}")
-            tags = await self.bot.txt2tag_client.request_tags(prompt)
-            if tags is None:
-                return await ctx.respond("Failed to add booru tags")
-
-            prompt += " " + tags
-
         # concatencate prefixes
         if values[PREFIX] is not None:
             prompt = values[PREFIX] + ", " + prompt
@@ -265,7 +253,6 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
                       skip_prefixes: discord.Option(bool, default=False, description="Do not add prefixes to prompt and negative prompt. Overrides skip_prefix and skip_neg_prefix"),
                       skip_prefix: discord.Option(bool, default=False, description="Do not add prefix to prompt"),
                       skip_neg_prefix: discord.Option(bool, default=False, description="Do not add negative prefix to prompt"),
-                      add_booru_tags: discord.Option(bool, default=False, description="Use LLM to add booru tags to your prompt"),
                       **values: dict) -> None:
         """
         A slash command that generates images using Stable Diffusion. See DISCORD_ARG_DICT for what options can be 
@@ -297,7 +284,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
         if skip_neg_prefix or skip_prefixes:
             values[NEG_PREFIX] = None
 
-        await self._process_request(ctx, prompt, negative_prompt, batch_size, add_booru_tags=add_booru_tags, **values)
+        await self._process_request(ctx, prompt, negative_prompt, batch_size, **values)
 
     @discord.slash_command(description="generate images using image as base with stable diffusion")
     @check_channel()
