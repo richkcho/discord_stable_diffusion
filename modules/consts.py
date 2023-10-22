@@ -39,6 +39,8 @@ RESIZE_MODE = "resize_mode"
 AUTOSIZE = "autosize"
 AUTOSIZE_MAXSIZE = "autosize_maxsize"
 RESIZE_SCALE = "resize_scale"
+REFINER = "refiner"
+REFINER_SWITCH_AT = "refiner_switch_at"
 
 PREFIX_PARAMS = {
     PREFIX: {
@@ -109,6 +111,19 @@ BASE_PARAMS = {
         "default": "anythingV5",
         "description": "which stable diffusion model to use for generation",
         "supported_values": []
+    },
+    REFINER: {
+        "type": str,
+        "default": "None",
+        "description": "which model to use for refining (required for SDXL)",
+        "supported_values": ["None"]
+    },
+    REFINER_SWITCH_AT: {
+        "type": float,
+        "default": 0.8,
+        "description": "when to switch to the refiner (when enabled)",
+        "min": 0,
+        "max": 1
     }
 }
 
@@ -203,7 +218,7 @@ def update_config():
     """
     model_dir = "./stable-diffusion-webui/models/Stable-diffusion/"
     supported_vaes = BASE_PARAMS[VAE]["supported_values"]
-    supported_models = BASE_PARAMS[MODEL]["supported_values"]
+    supported_models_list = [BASE_PARAMS[MODEL]["supported_values"], BASE_PARAMS[REFINER]["supported_values"]]
     for file in os.listdir(model_dir):
         if not os.path.isfile(os.path.join(model_dir, file)):
             continue
@@ -211,7 +226,8 @@ def update_config():
         if file.endswith("vae.pt"):
             supported_vaes.append(file)
         elif file.endswith(".safetensors") or file.endswith(".ckpt"):
-            supported_models.append(os.path.splitext(file)[0])
+            for supported_models in supported_models_list:
+                supported_models.append(os.path.splitext(file)[0])
 
 
 # special keywords (not config keywords)

@@ -91,6 +91,9 @@ def main():
         else:
             raise ValueError("Bad sd client entry!")
 
+        # workaround so that the cache.json can be updated without stepping over each other
+        time.sleep(2)
+
     if len(webui_urls) == 0:
         raise ValueError("Can't run bot with 0 stable diffusion clients!")
 

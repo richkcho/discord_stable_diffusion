@@ -34,7 +34,7 @@ class SDWorkItem:
         - set_highres(self, scale: float, upscaler: str, highres_steps: int, denoising_str: float): sets the attributes related to high-resolution image generation.
     """
 
-    def __init__(self, model: str, vae: str, prompt: str, neg_prompt: str, width: int, height: int, steps: int, cfg: float, sampler: str, seed: int, batch_size: int, context_handle: str):
+    def __init__(self, model: str, vae: str, prompt: str, neg_prompt: str, width: int, height: int, steps: int, cfg: float, sampler: str, seed: int, batch_size: int, context_handle: str, refiner: str, refiner_switch_at: float):
         """
         Class representing a work item for stable diffusion image generation.
 
@@ -64,6 +64,8 @@ class SDWorkItem:
         self.seed = seed
         self.batch_size = batch_size
         self.context_handle = context_handle
+        self.refiner = refiner
+        self.refiner_switch_at = refiner_switch_at
         self.creation_time = time.time()
 
         self.error_message = "unknown error"

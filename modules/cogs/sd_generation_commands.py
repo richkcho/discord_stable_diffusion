@@ -218,7 +218,7 @@ class DiscordStableDiffusionGenerationCommands(commands.Cog):
 
         # construct work item, ack message, and ship it. Do not modify values after this line
         work_item = SDWorkItem(values[MODEL], values[VAE], prompt, negative_prompt, values[WIDTH], values[HEIGHT],
-                             values[STEPS], values[CFG], values[SAMPLER], values[SEED], batch_size, command_handle)
+                             values[STEPS], values[CFG], values[SAMPLER], values[SEED], batch_size, command_handle, values[REFINER], values[REFINER_SWITCH_AT])
 
         # upscaling and img2img are mutually exclusive (for now?).
         if image_b64 is not None:

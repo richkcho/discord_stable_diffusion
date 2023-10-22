@@ -155,6 +155,9 @@ def make_message_str(prompt: str, negative_prompt: str, batch_size: int, image_u
     elif values[SCALE] is not None and values[SCALE] > 1:
         ack_message += f"Upscaling by {values[SCALE]:.2f} using highres upscaler {values[UPSCALER]}, {values[HIGHRES_STEPS]} steps. Denoising str {values[DENOISING_STR]:.2f}\n"
 
+    if values[REFINER] != "None":
+        ack_message += f"Using refiner model: {values[REFINER]}, refiner switch at value: {values[REFINER_SWITCH_AT]:.2f}"
+
     return ack_message
 
 
@@ -179,11 +182,13 @@ def parse_message_str(message_str: str) -> dict:
 
     param_regexes = [
         r"Using model: (.+?), vae: (.+?), image size: (\d+?)x(\d+)",
-        r"Using steps: (\d+?), cfg: (\d*.\d{2}), sampler: (.+?), seed (\d+)"
+        r"Using steps: (\d+?), cfg: (\d*.\d{2}), sampler: (.+?), seed (\d+)",
+        r"Using refiner model: (.+?), refiner switch at value: (\d*.\d{2})"
     ]
     param_keynames = [
         [MODEL, VAE, WIDTH, HEIGHT],
-        [STEPS, CFG, SAMPLER, SEED]
+        [STEPS, CFG, SAMPLER, SEED],
+        [REFINER, REFINER_SWITCH_AT]
     ]
 
     img2img_regex = r"img2img resize mode: (.+?), denoising str (\d*.\d{2}), url: (.+)"

@@ -32,7 +32,7 @@ def test_sd_controller_scheduling():
     item_count = 100
     for i in range(item_count):
         work_item = SDWorkItem(random.choice(BASE_PARAMS[MODEL]["supported_values"]), "foo",
-                             "prompt", "neg-prompt", 512, 512, 30, 7, "Euler", 1, 1, str(i))
+                             "prompt", "neg-prompt", 512, 512, 30, 7, "Euler", 1, 1, str(i), "", 0)
         work_item.creation_time -= random.randint(0, SOFT_DEADLINE)
         work_queue.put(work_item)
 

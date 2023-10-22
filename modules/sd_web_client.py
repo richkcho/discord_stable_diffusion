@@ -179,6 +179,10 @@ class StableDiffusionWebClient(threading.Thread):
             payload["hr_second_pass_steps"] = work_item.highres_steps
             payload["denoising_strength"] = work_item.denoising_str
 
+        if work_item.refiner != "None":
+            payload["refiner_checkpoint"] = work_item.refiner
+            payload["refiner_switch_at"] = work_item.refiner_switch_at
+
         payload["override_settings"] = {
             "sd_vae": work_item.vae
         }
@@ -213,6 +217,11 @@ class StableDiffusionWebClient(threading.Thread):
                 "data:image/png;base64," + work_item.image_b64
             ]
         }
+        
+        if work_item.refiner != "None":
+            payload["refiner_checkpoint"] = work_item.refiner
+            payload["refiner_switch_at"] = work_item.refiner_switch_at
+
         payload["override_settings"] = {
             "sd_vae": work_item.vae
         }
