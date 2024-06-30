@@ -179,7 +179,7 @@ class StableDiffusionWebClient(threading.Thread):
             payload["hr_second_pass_steps"] = work_item.highres_steps
             payload["denoising_strength"] = work_item.denoising_str
 
-        if work_item.refiner != "None":
+        if work_item.refiner not in ("None", None):
             payload["refiner_checkpoint"] = work_item.refiner
             payload["refiner_switch_at"] = work_item.refiner_switch_at
 
@@ -218,7 +218,7 @@ class StableDiffusionWebClient(threading.Thread):
             ]
         }
         
-        if work_item.refiner != "None":
+        if work_item.refiner not in ("None", None):
             payload["refiner_checkpoint"] = work_item.refiner
             payload["refiner_switch_at"] = work_item.refiner_switch_at
 

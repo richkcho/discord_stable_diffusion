@@ -155,7 +155,7 @@ def make_message_str(prompt: str, negative_prompt: str, batch_size: int, image_u
     elif values[SCALE] is not None and values[SCALE] > 1:
         ack_message += f"Upscaling by {values[SCALE]:.2f} using highres upscaler {values[UPSCALER]}, {values[HIGHRES_STEPS]} steps. Denoising str {values[DENOISING_STR]:.2f}\n"
 
-    if values[REFINER] != "None":
+    if values[REFINER] not in ("None", None):
         ack_message += f"Using refiner model: {values[REFINER]}, refiner switch at value: {values[REFINER_SWITCH_AT]:.2f}"
 
     return ack_message
@@ -183,12 +183,10 @@ def parse_message_str(message_str: str) -> dict:
     param_regexes = [
         r"Using model: (.+?), vae: (.+?), image size: (\d+?)x(\d+)",
         r"Using steps: (\d+?), cfg: (\d*.\d{2}), sampler: (.+?), seed (\d+)",
-        r"Using refiner model: (.+?), refiner switch at value: (\d*.\d{2})"
     ]
     param_keynames = [
         [MODEL, VAE, WIDTH, HEIGHT],
         [STEPS, CFG, SAMPLER, SEED],
-        [REFINER, REFINER_SWITCH_AT]
     ]
 
     img2img_regex = r"img2img resize mode: (.+?), denoising str (\d*.\d{2}), url: (.+)"
@@ -201,6 +199,9 @@ def parse_message_str(message_str: str) -> dict:
         HIGHRES_STEPS,
         DENOISING_STR
     ]
+
+    refiner_regex = r"Using refiner model: (.+?), refiner switch at value: (\d*.\d{2})"
+    refiner_keynames = [REFINER, REFINER_SWITCH_AT]
 
     lines = message_str.splitlines()
 
@@ -244,6 +245,19 @@ def parse_message_str(message_str: str) -> dict:
         for i, key_name in enumerate(hires_keynames):
             value_type = ALL_CONFIG[key_name]["type"]
             values[key_name] = value_type(hires_match.group(i + 1))
+    else:
+        lines.insert(0, line)
+
+    if len(lines) == 0:
+        return validate_params(values)
+
+    # check for refiner
+    line = lines.pop(0)
+    refiner_match = re.match(refiner_regex, line)
+    if refiner_match is not None:
+        for i, key_name in enumerate(refiner_keynames):
+            value_type = ALL_CONFIG[key_name]["type"]
+            values[key_name] = value_type(refiner_match.group(i + 1))
 
     return validate_params(values)
 
