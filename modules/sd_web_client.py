@@ -10,6 +10,7 @@ import base64
 import io
 import threading
 import time
+import traceback
 from subprocess import Popen
 
 import requests
@@ -253,8 +254,8 @@ class StableDiffusionWebClient(threading.Thread):
             images = [Image.open(io.BytesIO(base64.b64decode(i.split(",",1)[0]))) for i in data["images"]]
 
             work_item.images = images
-        except Exception as e:
-            print(e)
+        except Exception:
+            print(traceback.format_exc())
             print("Failed to process work item")
 
     def detach_from_queue(self):

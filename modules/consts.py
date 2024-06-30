@@ -73,11 +73,11 @@ BASE_PARAMS = {
     },
     SAMPLER: {
         "type": str,
-        "default": "DPM++ 2M Karras",
+        "default": "DPM++ 2M",
         "description": "which sampler to use",
-        "supported_values": ['Euler a', 'Euler', 'LMS', 'Heun', 'DPM2', 'DPM2 a', 'DPM++ 2S a', 'DPM++ 2M',
-                             'DPM++ SDE', 'DPM fast', 'DPM adaptive', 'LMS Karras', 'DPM2 Karras', 'DPM2 a Karras',
-                             'DPM++ 2S a Karras', 'DPM++ 2M Karras', 'DPM++ SDE Karras', "DDIM", "PLMS"]
+        "supported_values": ['DPM++ 2M', 'DPM++ SDE', 'DPM++ 2M SDE', 'DPM++ 2M SDE Heun', 'DPM++ 2S a', 
+            'DPM++ 3M SDE', 'Euler a', 'Euler', 'LMS', 'Heun', 'DPM2', 'DPM2 a', 'DPM fast', 
+            'DPM adaptive', 'Restart', 'DDIM', 'PLMS', 'LCM']
     },
     SEED: {
         "type": int,
